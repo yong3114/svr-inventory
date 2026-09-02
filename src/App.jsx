@@ -25,6 +25,8 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  ToggleLeft,
+  Pencil,
   SlidersHorizontal,
   UserCog,
   UserRound,
@@ -160,6 +162,30 @@ function App() {
   const [stockCountError, setStockCountError] = useState('')
   const [stockCountCategory, setStockCountCategory] = useState('smart_lock')
 
+  const [productCatalog, setProductCatalog] = useState([])
+  const [allLocations, setAllLocations] = useState([])
+  const [settingsView, setSettingsView] = useState('products')
+  const [productEditor, setProductEditor] = useState(null)
+  const [productForm, setProductForm] = useState({
+    sku: '',
+    name: '',
+    category: 'smart_lock',
+    app_variant: '',
+    minimum_stock: 0,
+    active: true,
+  })
+  const [productSaving, setProductSaving] = useState(false)
+  const [productError, setProductError] = useState('')
+  const [locationEditor, setLocationEditor] = useState(null)
+  const [locationForm, setLocationForm] = useState({
+    code: '',
+    name: '',
+    location_type: 'warehouse',
+    active: true,
+  })
+  const [locationSaving, setLocationSaving] = useState(false)
+  const [locationError, setLocationError] = useState('')
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
@@ -275,6 +301,8 @@ function App() {
     setProfiles([])
     setProfile(null)
     setAuditEvents([])
+    setProductCatalog([])
+    setAllLocations([])
     setProfileLoading(true)
     setActiveTab('home')
   }
@@ -292,6 +320,8 @@ function App() {
       jobsResult,
       profilesResult,
       auditResult,
+      catalogResult,
+      allLocationsResult,
     ] = await Promise.all([
       supabase.rpc('get_inventory_summary'),
       supabase
@@ -322,6 +352,15 @@ function App() {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(80),
+      supabase
+        .from('products')
+        .select('id, sku, name, category, app_variant, minimum_stock, active, created_at')
+        .order('category')
+        .order('name'),
+      supabase
+        .from('locations')
+        .select('*')
+        .order('created_at'),
     ])
 
     const firstError =
@@ -332,7 +371,9 @@ function App() {
       reservationsResult.error ||
       jobsResult.error ||
       profilesResult.error ||
-      auditResult.error
+      auditResult.error ||
+      catalogResult.error ||
+      allLocationsResult.error
 
     if (firstError) {
       console.error(firstError)
@@ -347,6 +388,8 @@ function App() {
       setJobs(jobsResult.data || [])
       setProfiles(nextProfiles)
       setAuditEvents(auditResult.data || [])
+      setProductCatalog(catalogResult.data || [])
+      setAllLocations(allLocationsResult.data || [])
       setProfile(
         nextProfiles.find(
           (item) => item.user_id === session?.user?.id
@@ -365,11 +408,16 @@ function App() {
   }
 
   function productById(id) {
+    const catalogItem = productCatalog.find((item) => item.id === id)
+    if (catalogItem) return { ...catalogItem, product_id: catalogItem.id }
     return inventory.find((item) => item.product_id === id)
   }
 
   function locationById(id) {
-    return locations.find((item) => item.id === id)
+    return (
+      allLocations.find((item) => item.id === id) ||
+      locations.find((item) => item.id === id)
+    )
   }
 
   function profileByUserId(id) {
@@ -875,6 +923,127 @@ function App() {
     setAccessUser(null)
     setAccessSaving(false)
     showToast('User access updated')
+    await loadAppData()
+  }
+
+
+  function openInventorySettings() {
+    if (!isManagement) {
+      showToast('Owner/Admin only')
+      return
+    }
+    setActiveTab('settings')
+  }
+
+  function openProductEditor(product = null) {
+    if (!isManagement) return
+    setProductEditor(product || { id: null })
+    setProductForm({
+      sku: product?.sku || '',
+      name: product?.name || '',
+      category: product?.category || 'smart_lock',
+      app_variant: product?.app_variant || '',
+      minimum_stock: Number(product?.minimum_stock || 0),
+      active: product?.active !== false,
+    })
+    setProductError('')
+  }
+
+  function closeProductEditor() {
+    if (productSaving) return
+    setProductEditor(null)
+    setProductError('')
+  }
+
+  function updateProductForm(field, value) {
+    setProductForm((current) => ({ ...current, [field]: value }))
+    setProductError('')
+  }
+
+  async function saveProductSetting() {
+    if (!isManagement || !productEditor) return
+    if (!productForm.sku.trim() || !productForm.name.trim()) {
+      setProductError('SKU 和 Product Name 都必须填写。')
+      return
+    }
+
+    setProductSaving(true)
+    setProductError('')
+
+    const { error } = await supabase.rpc('manage_product_setting', {
+      p_product_id: productEditor.id || null,
+      p_sku: productForm.sku.trim(),
+      p_name: productForm.name.trim(),
+      p_category: productForm.category,
+      p_app_variant: productForm.app_variant.trim() || null,
+      p_minimum_stock: Math.max(0, Math.floor(Number(productForm.minimum_stock) || 0)),
+      p_active: productForm.active,
+    })
+
+    if (error) {
+      console.error(error)
+      setProductError(error.message || '保存 Product 失败。')
+      setProductSaving(false)
+      return
+    }
+
+    setProductEditor(null)
+    setProductSaving(false)
+    showToast(productEditor.id ? 'Product updated' : 'Product added')
+    await loadAppData()
+  }
+
+  function openLocationEditor(location = null) {
+    if (!isManagement) return
+    setLocationEditor(location || { id: null })
+    setLocationForm({
+      code: location?.code || '',
+      name: location?.name || '',
+      location_type: location?.location_type || 'warehouse',
+      active: location?.active !== false,
+    })
+    setLocationError('')
+  }
+
+  function closeLocationEditor() {
+    if (locationSaving) return
+    setLocationEditor(null)
+    setLocationError('')
+  }
+
+  function updateLocationForm(field, value) {
+    setLocationForm((current) => ({ ...current, [field]: value }))
+    setLocationError('')
+  }
+
+  async function saveLocationSetting() {
+    if (!isManagement || !locationEditor) return
+    if (!locationForm.code.trim() || !locationForm.name.trim()) {
+      setLocationError('Location Code 和 Name 都必须填写。')
+      return
+    }
+
+    setLocationSaving(true)
+    setLocationError('')
+
+    const { error } = await supabase.rpc('manage_location_setting', {
+      p_location_id: locationEditor.id || null,
+      p_code: locationForm.code.trim().toUpperCase(),
+      p_name: locationForm.name.trim(),
+      p_location_type: locationForm.location_type,
+      p_active: locationForm.active,
+    })
+
+    if (error) {
+      console.error(error)
+      setLocationError(error.message || '保存 Stock Holder 失败。')
+      setLocationSaving(false)
+      return
+    }
+
+    setLocationEditor(null)
+    setLocationSaving(false)
+    showToast(locationEditor.id ? 'Stock Holder updated' : 'Stock Holder added')
     await loadAppData()
   }
 
@@ -1776,7 +1945,9 @@ function App() {
                   ? 'Account & Settings'
                   : activeTab === 'users'
                     ? 'User Access'
-                    : 'Stock Count'
+                    : activeTab === 'settings'
+                      ? 'Inventory Settings'
+                      : 'Stock Count'
 
   return (
     <div className="app-layout">
@@ -1977,6 +2148,7 @@ function App() {
               canManageInventory={canManageInventory}
               canViewUserAccess={canViewUserAccess}
               openPasswordChange={openPasswordChange}
+              openInventorySettings={openInventorySettings}
             />
           )}
 
@@ -1989,6 +2161,18 @@ function App() {
               locationById={locationById}
               openUserAccess={openUserAccess}
               openInviteUser={openInviteUser}
+            />
+          )}
+
+          {activeTab === 'settings' && isManagement && (
+            <InventorySettingsPage
+              products={productCatalog}
+              locations={allLocations}
+              settingsView={settingsView}
+              setSettingsView={setSettingsView}
+              openProductEditor={openProductEditor}
+              openLocationEditor={openLocationEditor}
+              goBack={() => setActiveTab('more')}
             />
           )}
 
@@ -2279,6 +2463,30 @@ function App() {
           updateForm={updateInviteForm}
           close={closeInviteUser}
           save={sendInvite}
+        />
+      )}
+
+      {productEditor && (
+        <ProductSettingsModal
+          form={productForm}
+          isNew={!productEditor.id}
+          saving={productSaving}
+          error={productError}
+          updateForm={updateProductForm}
+          close={closeProductEditor}
+          save={saveProductSetting}
+        />
+      )}
+
+      {locationEditor && (
+        <LocationSettingsModal
+          form={locationForm}
+          isNew={!locationEditor.id}
+          saving={locationSaving}
+          error={locationError}
+          updateForm={updateLocationForm}
+          close={closeLocationEditor}
+          save={saveLocationSetting}
         />
       )}
 
@@ -3918,6 +4126,7 @@ function MorePage({
   canManageInventory,
   canViewUserAccess,
   openPasswordChange,
+  openInventorySettings,
 }) {
   return (
     <div className="page-stack fade-in more-layout">
@@ -3994,16 +4203,18 @@ function MorePage({
           <ChevronRight size={17} />
         </button>
 
-        <button type="button">
-          <div className="settings-icon">
-            <Settings size={19} />
-          </div>
-          <div>
-            <strong>Inventory Settings</strong>
-            <span>Minimum stock and app preferences</span>
-          </div>
-          <span className="coming-badge">NEXT</span>
-        </button>
+        {canManageInventory && (
+          <button type="button" onClick={openInventorySettings}>
+            <div className="settings-icon">
+              <Settings size={19} />
+            </div>
+            <div>
+              <strong>Inventory Settings</strong>
+              <span>Minimum stock, products and stock holders</span>
+            </div>
+            <ChevronRight size={17} />
+          </button>
+        )}
 
         <button className="logout-setting" onClick={onLogout}>
           <div className="settings-icon">
@@ -4015,6 +4226,282 @@ function MorePage({
           </div>
           <ChevronRight size={17} />
         </button>
+      </section>
+    </div>
+  )
+}
+
+
+function InventorySettingsPage({
+  products,
+  locations,
+  settingsView,
+  setSettingsView,
+  openProductEditor,
+  openLocationEditor,
+  goBack,
+}) {
+  const activeProducts = products.filter((item) => item.active !== false)
+  const lowStockConfigured = activeProducts.filter(
+    (item) => Number(item.minimum_stock || 0) > 0
+  ).length
+  const activeLocations = locations.filter((item) => item.active !== false)
+
+  return (
+    <div className="page-stack fade-in">
+      <section className="surface-card page-intro settings-intro-card">
+        <div>
+          <p className="kicker">INVENTORY CONTROL</p>
+          <h2>Inventory Settings</h2>
+          <p>
+            Manage minimum stock, product models and every Warehouse / Technician / Agent stock holder.
+          </p>
+        </div>
+        <button className="secondary-button" onClick={goBack}>
+          <ArrowLeft size={16} /> Back
+        </button>
+      </section>
+
+      <section className="settings-stat-grid">
+        <div className="settings-stat-card">
+          <span>Active Products</span>
+          <strong>{activeProducts.length}</strong>
+          <small>{lowStockConfigured} with minimum stock target</small>
+        </div>
+        <div className="settings-stat-card">
+          <span>Active Stock Holders</span>
+          <strong>{activeLocations.length}</strong>
+          <small>Warehouse, technicians, agents & partners</small>
+        </div>
+      </section>
+
+      <div className="status-tabs settings-tabs">
+        <button
+          className={settingsView === 'products' ? 'active' : ''}
+          onClick={() => setSettingsView('products')}
+        >
+          Products & Minimum Stock
+        </button>
+        <button
+          className={settingsView === 'locations' ? 'active' : ''}
+          onClick={() => setSettingsView('locations')}
+        >
+          Stock Holders
+        </button>
+      </div>
+
+      {settingsView === 'products' ? (
+        <section className="surface-card settings-management-card">
+          <div className="settings-management-head">
+            <div>
+              <p className="kicker">PRODUCT MANAGEMENT</p>
+              <h3>Smart Locks & Lock Bodies</h3>
+            </div>
+            <button className="primary-button" onClick={() => openProductEditor()}>
+              <Plus size={16} /> Add Product
+            </button>
+          </div>
+
+          <div className="settings-record-list">
+            {products.map((product) => (
+              <button
+                className="settings-record"
+                key={product.id}
+                onClick={() => openProductEditor(product)}
+              >
+                <div className="settings-record-icon">
+                  {product.category === 'smart_lock' ? (
+                    <Boxes size={18} />
+                  ) : (
+                    <Wrench size={18} />
+                  )}
+                </div>
+                <div className="settings-record-copy">
+                  <div>
+                    <strong>
+                      {product.app_variant
+                        ? `${product.name} (${product.app_variant})`
+                        : product.name}
+                    </strong>
+                    <span className={product.active === false ? 'inactive-label' : ''}>
+                      {product.active === false ? 'Inactive' : product.sku}
+                    </span>
+                  </div>
+                  <small>
+                    Minimum stock: <b>{Number(product.minimum_stock || 0)}</b>
+                  </small>
+                </div>
+                <Pencil size={16} />
+              </button>
+            ))}
+          </div>
+        </section>
+      ) : (
+        <section className="surface-card settings-management-card">
+          <div className="settings-management-head">
+            <div>
+              <p className="kicker">LOCATION MANAGEMENT</p>
+              <h3>Stock Holders</h3>
+            </div>
+            <button className="primary-button" onClick={() => openLocationEditor()}>
+              <Plus size={16} /> Add Holder
+            </button>
+          </div>
+
+          <div className="settings-record-list">
+            {locations.map((location) => (
+              <button
+                className="settings-record"
+                key={location.id}
+                onClick={() => openLocationEditor(location)}
+              >
+                <div className="settings-record-icon">
+                  <Warehouse size={18} />
+                </div>
+                <div className="settings-record-copy">
+                  <div>
+                    <strong>{location.name}</strong>
+                    <span className={location.active === false ? 'inactive-label' : ''}>
+                      {location.active === false ? 'Inactive' : location.code}
+                    </span>
+                  </div>
+                  <small>{String(location.location_type || '').replaceAll('_', ' ')}</small>
+                </div>
+                <Pencil size={16} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+function ProductSettingsModal({
+  form,
+  isNew,
+  saving,
+  error,
+  updateForm,
+  close,
+  save,
+}) {
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="mini-modal settings-editor-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mini-modal-head">
+          <div>
+            <p className="kicker">{isNew ? 'NEW PRODUCT' : 'EDIT PRODUCT'}</p>
+            <h2>{isNew ? 'Add Product' : 'Product Settings'}</h2>
+            <p>Product details and minimum stock warning target.</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="settings-form-grid">
+          <div className="transaction-field">
+            <label>SKU *</label>
+            <input value={form.sku} onChange={(e) => updateForm('sku', e.target.value)} placeholder="e.g. VN-4" />
+          </div>
+          <div className="transaction-field">
+            <label>Product Name *</label>
+            <input value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="e.g. VN-4" />
+          </div>
+          <div className="transaction-field">
+            <label>Category</label>
+            <select value={form.category} onChange={(e) => updateForm('category', e.target.value)}>
+              <option value="smart_lock">Smart Lock</option>
+              <option value="lock_body">Lock Body</option>
+            </select>
+          </div>
+          <div className="transaction-field">
+            <label>App Variant</label>
+            <input value={form.app_variant} onChange={(e) => updateForm('app_variant', e.target.value)} placeholder="Tuya / TTLock / blank" />
+          </div>
+          <div className="transaction-field full-field">
+            <label>Minimum Stock</label>
+            <input type="number" min="0" inputMode="numeric" value={form.minimum_stock} onChange={(e) => updateForm('minimum_stock', e.target.value)} />
+            <small className="field-help">Available stock at or below this number will show as Low Stock.</small>
+          </div>
+        </div>
+
+        {!isNew && (
+          <label className="settings-toggle-row">
+            <div>
+              <strong>Active Product</strong>
+              <span>Inactive products cannot be selected for new stock transactions.</span>
+            </div>
+            <input type="checkbox" checked={form.active} onChange={(e) => updateForm('active', e.target.checked)} />
+          </label>
+        )}
+
+        {error && <div className="transaction-error">{error}</div>}
+        <div className="mini-modal-actions">
+          <button className="secondary-button" onClick={close} disabled={saving}>Cancel</button>
+          <button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Product'}</button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function LocationSettingsModal({
+  form,
+  isNew,
+  saving,
+  error,
+  updateForm,
+  close,
+  save,
+}) {
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="mini-modal settings-editor-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="mini-modal-head">
+          <div>
+            <p className="kicker">{isNew ? 'NEW STOCK HOLDER' : 'EDIT STOCK HOLDER'}</p>
+            <h2>{isNew ? 'Add Stock Holder' : 'Stock Holder Settings'}</h2>
+            <p>Warehouse, technician, installer, agent or partner location.</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="settings-form-grid">
+          <div className="transaction-field">
+            <label>Location Code *</label>
+            <input value={form.code} onChange={(e) => updateForm('code', e.target.value)} placeholder="e.g. MELAKA" />
+          </div>
+          <div className="transaction-field">
+            <label>Name *</label>
+            <input value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="e.g. Melaka - Ah Wei" />
+          </div>
+          <div className="transaction-field full-field">
+            <label>Type</label>
+            <select value={form.location_type} onChange={(e) => updateForm('location_type', e.target.value)}>
+              <option value="warehouse">Warehouse</option>
+              <option value="technician">Technician</option>
+              <option value="sales_installer">Sales Installer</option>
+              <option value="agent">Agent</option>
+              <option value="partner">Partner</option>
+            </select>
+          </div>
+        </div>
+
+        {!isNew && (
+          <label className="settings-toggle-row">
+            <div>
+              <strong>Active Stock Holder</strong>
+              <span>To deactivate, the holder must have zero stock and no active linked user.</span>
+            </div>
+            <input type="checkbox" checked={form.active} onChange={(e) => updateForm('active', e.target.checked)} />
+          </label>
+        )}
+
+        {error && <div className="transaction-error">{error}</div>}
+        <div className="mini-modal-actions">
+          <button className="secondary-button" onClick={close} disabled={saving}>Cancel</button>
+          <button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Holder'}</button>
+        </div>
       </section>
     </div>
   )
