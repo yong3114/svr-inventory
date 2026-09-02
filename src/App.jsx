@@ -12,6 +12,9 @@ import {
   LogOut,
   Menu,
   PackageCheck,
+  PackageMinus,
+  Plus,
+  Trash2,
   RefreshCw,
   Search,
   Settings,
@@ -53,6 +56,23 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
+  const [actionMode, setActionMode] = useState(null)
+  const [actionItems, setActionItems] = useState([
+    { product_id: '', quantity: 1 },
+  ])
+  const [actionForm, setActionForm] = useState({
+    from_location_id: '',
+    to_location_id: '',
+    customer_name: '',
+    customer_phone: '',
+    installation_date: '',
+    installation_area: '',
+    reference_no: '',
+    remark: '',
+  })
+  const [actionSaving, setActionSaving] = useState(false)
+  const [actionError, setActionError] = useState('')
+  const [toast, setToast] = useState('')
 
   const [selectedLocationId, setSelectedLocationId] = useState('')
   const [holderStock, setHolderStock] = useState({})
@@ -213,6 +233,338 @@ function App() {
     }
 
     return movement.movement_type
+  }
+
+
+  function showToast(message) {
+    setToast(message)
+    window.setTimeout(() => setToast(''), 2600)
+  }
+
+  function openAction(mode) {
+    const warehouse =
+      locations.find((location) => location.code === 'SVR-JB') ||
+      locations[0]
+
+    const firstOtherLocation = locations.find(
+      (location) => location.id !== warehouse?.id
+    )
+
+    setMobileActionsOpen(false)
+    setActionMode(mode)
+    setActionItems([{ product_id: '', quantity: 1 }])
+    setActionError('')
+    setActionForm({
+      from_location_id:
+        mode === 'transfer' || mode === 'stock_out'
+          ? warehouse?.id || ''
+          : '',
+      to_location_id:
+        mode === 'stock_in'
+          ? warehouse?.id || ''
+          : mode === 'transfer'
+            ? firstOtherLocation?.id || ''
+            : '',
+      customer_name: '',
+      customer_phone: '',
+      installation_date: '',
+      installation_area: '',
+      reference_no: '',
+      remark: '',
+    })
+  }
+
+  function closeAction() {
+    if (actionSaving) return
+    setActionMode(null)
+    setActionError('')
+  }
+
+  function updateActionForm(field, value) {
+    setActionForm((current) => ({
+      ...current,
+      [field]: value,
+    }))
+    setActionError('')
+  }
+
+  function updateActionItem(index, field, value) {
+    setActionItems((current) =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item
+
+        if (field === 'quantity') {
+          return {
+            ...item,
+            quantity: Math.max(1, Math.floor(Number(value) || 1)),
+          }
+        }
+
+        return { ...item, [field]: value }
+      })
+    )
+    setActionError('')
+  }
+
+  function addActionItem() {
+    setActionItems((current) => [
+      ...current,
+      { product_id: '', quantity: 1 },
+    ])
+  }
+
+  function removeActionItem(index) {
+    setActionItems((current) => {
+      if (current.length === 1) {
+        return [{ product_id: '', quantity: 1 }]
+      }
+
+      return current.filter((_, itemIndex) => itemIndex !== index)
+    })
+  }
+
+  function locationQuantity(productId, locationId) {
+    const row = locationStock.find(
+      (item) =>
+        item.product_id === productId &&
+        item.location_id === locationId
+    )
+
+    return Number(row?.quantity || 0)
+  }
+
+  function availableQuantity(productId) {
+    const product = inventory.find(
+      (item) => item.product_id === productId
+    )
+
+    return Number(product?.available_stock || 0)
+  }
+
+  function actionLabel(mode) {
+    if (mode === 'stock_in') return 'Stock In'
+    if (mode === 'transfer') return 'Transfer'
+    if (mode === 'reserve') return 'Reserve'
+    if (mode === 'stock_out') return 'Stock Out'
+    return 'Stock Action'
+  }
+
+  function validateAction() {
+    const items = actionItems.filter((item) => item.product_id)
+
+    if (items.length === 0) {
+      return '请至少选择一个产品。'
+    }
+
+    const duplicateIds = items
+      .map((item) => item.product_id)
+      .filter(
+        (id, index, all) => all.indexOf(id) !== index
+      )
+
+    if (duplicateIds.length > 0) {
+      return '同一个产品不要重复添加，请直接调整数量。'
+    }
+
+    if (items.some((item) => Number(item.quantity) <= 0)) {
+      return 'Quantity 必须大于 0。'
+    }
+
+    if (actionMode === 'stock_in') {
+      if (!actionForm.to_location_id) {
+        return '请选择 Stock In 到哪个 Location。'
+      }
+    }
+
+    if (actionMode === 'transfer') {
+      if (
+        !actionForm.from_location_id ||
+        !actionForm.to_location_id
+      ) {
+        return '请选择 From 和 To。'
+      }
+
+      if (
+        actionForm.from_location_id === actionForm.to_location_id
+      ) {
+        return 'From 和 To 不能是同一个 Location。'
+      }
+
+      for (const item of items) {
+        const currentQty = locationQuantity(
+          item.product_id,
+          actionForm.from_location_id
+        )
+
+        if (Number(item.quantity) > currentQty) {
+          const product = productById(item.product_id)
+          return `${productDisplayName(product)} 在这个 Location 只有 ${currentQty} 个。`
+        }
+      }
+    }
+
+    if (actionMode === 'stock_out') {
+      if (!actionForm.from_location_id) {
+        return '请选择从哪个 Location 出货。'
+      }
+
+      if (!actionForm.customer_name.trim()) {
+        return 'Stock Out 请填写 Customer / Job Name，方便以后查记录。'
+      }
+
+      for (const item of items) {
+        const currentQty = locationQuantity(
+          item.product_id,
+          actionForm.from_location_id
+        )
+
+        if (Number(item.quantity) > currentQty) {
+          const product = productById(item.product_id)
+          return `${productDisplayName(product)} 在这个 Location 只有 ${currentQty} 个。`
+        }
+
+        const availableQty = availableQuantity(item.product_id)
+        if (Number(item.quantity) > availableQty) {
+          const product = productById(item.product_id)
+          return `${productDisplayName(product)} 目前只有 ${availableQty} 个可卖库存，其余已 Reserved。`
+        }
+      }
+    }
+
+    if (actionMode === 'reserve') {
+      if (!actionForm.customer_name.trim()) {
+        return 'Reserve 必须填写 Customer Name。'
+      }
+
+      for (const item of items) {
+        const availableQty = availableQuantity(item.product_id)
+
+        if (Number(item.quantity) > availableQty) {
+          const product = productById(item.product_id)
+          return `${productDisplayName(product)} 目前只有 ${availableQty} 个 Available。`
+        }
+      }
+    }
+
+    return ''
+  }
+
+  async function saveAction() {
+    const validationError = validateAction()
+
+    if (validationError) {
+      setActionError(validationError)
+      return
+    }
+
+    const items = actionItems.filter((item) => item.product_id)
+    setActionSaving(true)
+    setActionError('')
+
+    const timestamp = Date.now()
+    const referenceNo =
+      actionForm.reference_no.trim() ||
+      `${
+        actionMode === 'stock_in'
+          ? 'IN'
+          : actionMode === 'transfer'
+            ? 'TRF'
+            : actionMode === 'stock_out'
+              ? 'OUT'
+              : 'RSV'
+      }-${timestamp}`
+
+    try {
+      if (actionMode === 'reserve') {
+        const { data: reservation, error: reservationError } =
+          await supabase
+            .from('reservations')
+            .insert({
+              customer_name: actionForm.customer_name.trim(),
+              customer_phone:
+                actionForm.customer_phone.trim() || null,
+              installation_date:
+                actionForm.installation_date || null,
+              installation_area:
+                actionForm.installation_area.trim() || null,
+              installer_location_id:
+                actionForm.to_location_id || null,
+              status: 'reserved',
+              remark:
+                [
+                  actionForm.reference_no.trim()
+                    ? `Ref: ${actionForm.reference_no.trim()}`
+                    : '',
+                  actionForm.remark.trim(),
+                ]
+                  .filter(Boolean)
+                  .join(' | ') || null,
+              created_by: session.user.id,
+            })
+            .select('id')
+            .single()
+
+        if (reservationError) throw reservationError
+
+        const { error: itemError } = await supabase
+          .from('reservation_items')
+          .insert(
+            items.map((item) => ({
+              reservation_id: reservation.id,
+              product_id: item.product_id,
+              quantity: Number(item.quantity),
+            }))
+          )
+
+        if (itemError) {
+          await supabase
+            .from('reservations')
+            .delete()
+            .eq('id', reservation.id)
+
+          throw itemError
+        }
+      } else {
+        const movementRows = items.map((item) => ({
+          product_id: item.product_id,
+          quantity: Number(item.quantity),
+          movement_type: actionMode,
+          from_location_id:
+            actionMode === 'transfer' ||
+            actionMode === 'stock_out'
+              ? actionForm.from_location_id
+              : null,
+          to_location_id:
+            actionMode === 'stock_in' ||
+            actionMode === 'transfer'
+              ? actionForm.to_location_id
+              : null,
+          customer_name:
+            actionForm.customer_name.trim() || null,
+          reference_no: referenceNo,
+          remark: actionForm.remark.trim() || null,
+          created_by: session.user.id,
+        }))
+
+        const { error } = await supabase
+          .from('stock_movements')
+          .insert(movementRows)
+
+        if (error) throw error
+      }
+
+      await loadAppData()
+      setActionMode(null)
+      showToast(`${actionLabel(actionMode)} saved successfully`)
+    } catch (error) {
+      console.error(error)
+      setActionError(
+        error?.message ||
+          '保存失败，请不要重复按，把错误截图给我。'
+      )
+    } finally {
+      setActionSaving(false)
+    }
   }
 
   async function openStockCount() {
@@ -773,7 +1125,10 @@ function App() {
               </button>
             </div>
 
-            <button className="sheet-action pending-action">
+            <button
+              className="sheet-action"
+              onClick={() => openAction('stock_in')}
+            >
               <div className="action-icon">
                 <ArrowDownToLine size={20} />
               </div>
@@ -784,7 +1139,10 @@ function App() {
               <ChevronRight size={18} />
             </button>
 
-            <button className="sheet-action pending-action">
+            <button
+              className="sheet-action"
+              onClick={() => openAction('transfer')}
+            >
               <div className="action-icon">
                 <ArrowRightLeft size={20} />
               </div>
@@ -795,13 +1153,30 @@ function App() {
               <ChevronRight size={18} />
             </button>
 
-            <button className="sheet-action pending-action">
+            <button
+              className="sheet-action"
+              onClick={() => openAction('reserve')}
+            >
               <div className="action-icon">
                 <PackageCheck size={20} />
               </div>
               <div>
                 <strong>Reserve</strong>
                 <span>Reserve stock for customer</span>
+              </div>
+              <ChevronRight size={18} />
+            </button>
+
+            <button
+              className="sheet-action"
+              onClick={() => openAction('stock_out')}
+            >
+              <div className="action-icon">
+                <PackageMinus size={20} />
+              </div>
+              <div>
+                <strong>Stock Out</strong>
+                <span>Sold or installed stock</span>
               </div>
               <ChevronRight size={18} />
             </button>
@@ -816,17 +1191,395 @@ function App() {
               </div>
               <ChevronRight size={18} />
             </button>
-
-            <p className="sheet-note">
-              Stock In, Transfer 和 Reserve 的正式流程下一阶段接上；
-              现在先把整套 App UI 和多人使用架构稳定下来。
-            </p>
           </div>
         </div>
       )}
+
+      {actionMode && (
+        <ActionModal
+          mode={actionMode}
+          label={actionLabel(actionMode)}
+          inventory={inventory}
+          locations={locations}
+          form={actionForm}
+          items={actionItems}
+          saving={actionSaving}
+          error={actionError}
+          updateForm={updateActionForm}
+          updateItem={updateActionItem}
+          addItem={addActionItem}
+          removeItem={removeActionItem}
+          close={closeAction}
+          save={saveAction}
+          productDisplayName={productDisplayName}
+          locationQuantity={locationQuantity}
+          availableQuantity={availableQuantity}
+        />
+      )}
+
+      {toast && <div className="app-toast">{toast}</div>}
     </div>
   )
 }
+
+
+function ActionModal({
+  mode,
+  label,
+  inventory,
+  locations,
+  form,
+  items,
+  saving,
+  error,
+  updateForm,
+  updateItem,
+  addItem,
+  removeItem,
+  close,
+  save,
+  productDisplayName,
+  locationQuantity,
+  availableQuantity,
+}) {
+  const warehouse =
+    locations.find((location) => location.code === 'SVR-JB') ||
+    locations[0]
+
+  const selectedFrom = form.from_location_id
+
+  function stockHint(item) {
+    if (!item.product_id) return ''
+
+    if (mode === 'transfer' || mode === 'stock_out') {
+      return `At source: ${locationQuantity(
+        item.product_id,
+        selectedFrom
+      )}`
+    }
+
+    if (mode === 'reserve') {
+      return `Available: ${availableQuantity(item.product_id)}`
+    }
+
+    return ''
+  }
+
+  const titleCopy =
+    mode === 'stock_in'
+      ? 'Receive new stock'
+      : mode === 'transfer'
+        ? 'Move stock between locations'
+        : mode === 'reserve'
+          ? 'Reserve stock for customer'
+          : 'Record sold / installed stock'
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section
+        className="transaction-modal"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="transaction-modal-head">
+          <div>
+            <p className="kicker">STOCK ACTION</p>
+            <h2>{label}</h2>
+            <p>{titleCopy}</p>
+          </div>
+
+          <button className="icon-button" onClick={close}>
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="transaction-scroll">
+          {(mode === 'transfer' || mode === 'stock_out') && (
+            <div className="transaction-field">
+              <label>From Location</label>
+              <select
+                value={form.from_location_id}
+                onChange={(e) =>
+                  updateForm('from_location_id', e.target.value)
+                }
+              >
+                <option value="">Select location</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {(mode === 'stock_in' || mode === 'transfer') && (
+            <div className="transaction-field">
+              <label>
+                {mode === 'stock_in' ? 'Stock In To' : 'To Location'}
+              </label>
+              <select
+                value={form.to_location_id}
+                onChange={(e) =>
+                  updateForm('to_location_id', e.target.value)
+                }
+              >
+                <option value="">Select location</option>
+                {locations.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {mode === 'reserve' && (
+            <>
+              <div className="transaction-two-col">
+                <div className="transaction-field">
+                  <label>Customer Name *</label>
+                  <input
+                    value={form.customer_name}
+                    onChange={(e) =>
+                      updateForm('customer_name', e.target.value)
+                    }
+                    placeholder="e.g. Mr Tan"
+                  />
+                </div>
+
+                <div className="transaction-field">
+                  <label>Phone</label>
+                  <input
+                    value={form.customer_phone}
+                    onChange={(e) =>
+                      updateForm('customer_phone', e.target.value)
+                    }
+                    placeholder="01X-XXXXXXX"
+                  />
+                </div>
+              </div>
+
+              <div className="transaction-two-col">
+                <div className="transaction-field">
+                  <label>Installation Date</label>
+                  <input
+                    type="date"
+                    value={form.installation_date}
+                    onChange={(e) =>
+                      updateForm(
+                        'installation_date',
+                        e.target.value
+                      )
+                    }
+                  />
+                </div>
+
+                <div className="transaction-field">
+                  <label>Area</label>
+                  <input
+                    value={form.installation_area}
+                    onChange={(e) =>
+                      updateForm(
+                        'installation_area',
+                        e.target.value
+                      )
+                    }
+                    placeholder="e.g. Eco Botanic"
+                  />
+                </div>
+              </div>
+
+              <div className="transaction-field">
+                <label>Installer / Holder (optional)</label>
+                <select
+                  value={form.to_location_id}
+                  onChange={(e) =>
+                    updateForm('to_location_id', e.target.value)
+                  }
+                >
+                  <option value="">Not assigned yet</option>
+                  {locations
+                    .filter(
+                      (location) =>
+                        location.id !== warehouse?.id ||
+                        location.location_type !== 'warehouse'
+                    )
+                    .map((location) => (
+                      <option key={location.id} value={location.id}>
+                        {location.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {mode === 'stock_out' && (
+            <div className="transaction-field">
+              <label>Customer / Job Name *</label>
+              <input
+                value={form.customer_name}
+                onChange={(e) =>
+                  updateForm('customer_name', e.target.value)
+                }
+                placeholder="e.g. Mr Lim / Eco Botanic installation"
+              />
+            </div>
+          )}
+
+          <div className="transaction-products">
+            <div className="transaction-products-head">
+              <div>
+                <p className="kicker">ITEMS</p>
+                <h3>Products</h3>
+              </div>
+
+              <button
+                type="button"
+                className="add-line-button"
+                onClick={addItem}
+              >
+                <Plus size={15} />
+                Add item
+              </button>
+            </div>
+
+            {items.map((item, index) => (
+              <div className="transaction-item" key={index}>
+                <div className="transaction-item-main">
+                  <select
+                    value={item.product_id}
+                    onChange={(e) =>
+                      updateItem(
+                        index,
+                        'product_id',
+                        e.target.value
+                      )
+                    }
+                  >
+                    <option value="">Select product</option>
+                    <optgroup label="Smart Locks">
+                      {inventory
+                        .filter(
+                          (product) =>
+                            product.category === 'smart_lock'
+                        )
+                        .map((product) => (
+                          <option
+                            key={product.product_id}
+                            value={product.product_id}
+                          >
+                            {productDisplayName(product)}
+                          </option>
+                        ))}
+                    </optgroup>
+
+                    <optgroup label="Lock Bodies">
+                      {inventory
+                        .filter(
+                          (product) =>
+                            product.category === 'lock_body'
+                        )
+                        .map((product) => (
+                          <option
+                            key={product.product_id}
+                            value={product.product_id}
+                          >
+                            {productDisplayName(product)}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </select>
+
+                  <div className="transaction-qty">
+                    <span>Qty</span>
+                    <input
+                      type="number"
+                      min="1"
+                      inputMode="numeric"
+                      value={item.quantity}
+                      onChange={(e) =>
+                        updateItem(
+                          index,
+                          'quantity',
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="remove-line-button"
+                    onClick={() => removeItem(index)}
+                    title="Remove item"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+
+                {stockHint(item) && (
+                  <small className="stock-hint">
+                    {stockHint(item)}
+                  </small>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="transaction-two-col">
+            <div className="transaction-field">
+              <label>Reference No. (optional)</label>
+              <input
+                value={form.reference_no}
+                onChange={(e) =>
+                  updateForm('reference_no', e.target.value)
+                }
+                placeholder="PO / Job / Invoice"
+              />
+            </div>
+
+            <div className="transaction-field">
+              <label>Remark</label>
+              <input
+                value={form.remark}
+                onChange={(e) =>
+                  updateForm('remark', e.target.value)
+                }
+                placeholder="Optional note"
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="transaction-error">{error}</div>
+          )}
+        </div>
+
+        <div className="transaction-footer">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={close}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : `Confirm ${label}`}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 
 function Dashboard({
   totals,

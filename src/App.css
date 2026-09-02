@@ -1833,3 +1833,513 @@ select:focus-visible {
     font-size: 10px;
   }
 }
+
+
+/* ===========================
+   V3 - Transaction Actions
+   =========================== */
+
+.transaction-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  padding: 22px;
+  display: grid;
+  place-items: center;
+  background: rgba(17, 18, 20, 0.48);
+  backdrop-filter: blur(4px);
+}
+
+.transaction-modal {
+  width: min(720px, 100%);
+  max-height: min(860px, calc(100vh - 44px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 1px solid #e1e3e6;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 30px 90px rgba(17, 18, 20, 0.22);
+  animation: transactionIn 0.2s ease;
+}
+
+@keyframes transactionIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.transaction-modal-head {
+  padding: 20px 20px 17px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid #eceef0;
+}
+
+.transaction-modal-head h2 {
+  margin: 4px 0 3px;
+  font-size: 23px;
+  letter-spacing: -0.7px;
+}
+
+.transaction-modal-head > div > p:last-child {
+  margin: 0;
+  color: #8e9299;
+  font-size: 11px;
+}
+
+.transaction-scroll {
+  padding: 18px 20px 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.transaction-field {
+  min-width: 0;
+  margin-bottom: 14px;
+}
+
+.transaction-field label {
+  display: block;
+  margin-bottom: 7px;
+  color: #44484e;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.transaction-field input,
+.transaction-field select {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 12px;
+  border: 1px solid #dfe1e4;
+  border-radius: 11px;
+  background: #fff;
+  color: #22252a;
+  outline: none;
+}
+
+.transaction-field input:focus,
+.transaction-field select:focus,
+.transaction-item select:focus,
+.transaction-qty input:focus {
+  border-color: #8d9298;
+  box-shadow: 0 0 0 4px rgba(17, 18, 20, 0.04);
+}
+
+.transaction-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.transaction-products {
+  margin: 3px 0 16px;
+  padding: 15px;
+  border: 1px solid #e5e7ea;
+  border-radius: 15px;
+  background: #f8f9fa;
+}
+
+.transaction-products-head {
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.transaction-products-head h3 {
+  margin: 3px 0 0;
+  font-size: 14px;
+}
+
+.add-line-button {
+  min-height: 34px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #dfe1e4;
+  border-radius: 10px;
+  background: #fff;
+  color: #34373c;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.transaction-item {
+  padding: 10px;
+  border-top: 1px solid #e7e9ec;
+}
+
+.transaction-item:first-of-type {
+  border-top: 0;
+}
+
+.transaction-item-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 38px;
+  gap: 8px;
+  align-items: end;
+}
+
+.transaction-item select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid #dfe1e4;
+  border-radius: 10px;
+  background: #fff;
+  outline: none;
+  font-size: 11px;
+}
+
+.transaction-qty {
+  display: grid;
+  gap: 4px;
+}
+
+.transaction-qty span {
+  color: #8f949a;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.transaction-qty input {
+  width: 100%;
+  height: 42px;
+  padding: 0 5px;
+  border: 1px solid #dfe1e4;
+  border-radius: 10px;
+  text-align: center;
+  outline: none;
+  font-weight: 800;
+}
+
+.remove-line-button {
+  width: 38px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #e2e4e7;
+  border-radius: 10px;
+  background: #fff;
+  color: #9a4a44;
+}
+
+.stock-hint {
+  display: block;
+  margin-top: 6px;
+  color: #8f949a;
+  font-size: 9px;
+}
+
+.transaction-error {
+  margin-top: 4px;
+  padding: 11px 12px;
+  border: 1px solid #ffd7d3;
+  border-radius: 10px;
+  background: #fff2f1;
+  color: #ad372f;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.transaction-footer {
+  padding: 12px 20px;
+  display: grid;
+  grid-template-columns: 120px minmax(180px, 1fr);
+  gap: 9px;
+  border-top: 1px solid #eceef0;
+  background: #fff;
+}
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  z-index: 160;
+  padding: 11px 15px;
+  transform: translateX(-50%);
+  border-radius: 12px;
+  background: #111214;
+  color: #fff;
+  box-shadow: 0 16px 40px rgba(17, 18, 20, 0.2);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* =========================================
+   SVR Inventory - Font Size Upgrade
+   ========================================= */
+
+body {
+  font-size: 15px;
+}
+
+.app-header h1 {
+  font-size: 23px;
+}
+
+.hero-card h2 {
+  font-size: 35px;
+}
+
+.toolbar-copy h2,
+.page-intro h2 {
+  font-size: 27px;
+}
+
+.stock-count-heading h2 {
+  font-size: 25px;
+}
+
+.kicker {
+  font-size: 11px;
+}
+
+.metric-card span {
+  font-size: 12px;
+}
+
+.metric-card strong {
+  font-size: 33px;
+}
+
+.metric-card small {
+  font-size: 10px;
+}
+
+.compact-copy strong {
+  font-size: 12px;
+}
+
+.compact-copy span,
+.compact-number span {
+  font-size: 10px;
+}
+
+.compact-number strong {
+  font-size: 17px;
+}
+
+.category-label {
+  font-size: 9px;
+}
+
+.inventory-card h3 {
+  font-size: 16px;
+}
+
+.available-chip span {
+  font-size: 8px;
+}
+
+.available-chip strong {
+  font-size: 20px;
+}
+
+.inventory-stat-row span {
+  font-size: 9px;
+}
+
+.inventory-stat-row strong {
+  font-size: 15px;
+}
+
+.holder-copy span {
+  font-size: 9px;
+}
+
+.holder-copy h3 {
+  font-size: 15px;
+}
+
+.holder-stats span {
+  font-size: 9px;
+}
+
+.holder-button {
+  font-size: 11px;
+}
+
+.activity-copy strong {
+  font-size: 12px;
+}
+
+.activity-copy span {
+  font-size: 10px;
+}
+
+.activity-row time {
+  font-size: 9px;
+}
+
+.sidebar-nav button {
+  font-size: 13px;
+}
+
+.sidebar-brand strong {
+  font-size: 16px;
+}
+
+.auth-card form label {
+  font-size: 13px;
+}
+
+.auth-card form input {
+  font-size: 14px;
+}
+
+.count-location label {
+  font-size: 12px;
+}
+
+.count-location select {
+  font-size: 13px;
+}
+
+.count-row-copy > span {
+  font-size: 8px;
+}
+
+.count-row-copy strong {
+  font-size: 13px;
+}
+
+.count-row-copy small {
+  font-size: 9px;
+}
+
+.mobile-nav > button span {
+  font-size: 9px;
+}
+
+@media (max-width: 720px) {
+  .transaction-backdrop {
+    padding: 0;
+    place-items: end center;
+  }
+
+  .transaction-modal {
+    width: 100%;
+    max-height: 92vh;
+    border: 0;
+    border-radius: 23px 23px 0 0;
+  }
+
+  .transaction-modal-head {
+    padding: 17px 16px 14px;
+  }
+
+  .transaction-modal-head h2 {
+    font-size: 21px;
+  }
+
+  .transaction-scroll {
+    padding: 15px 16px 22px;
+  }
+
+  .transaction-two-col {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .transaction-products {
+    padding: 12px 8px;
+  }
+
+  .transaction-item {
+    padding: 10px 4px;
+  }
+
+  .transaction-item-main {
+    grid-template-columns: minmax(0, 1fr) 62px 38px;
+    gap: 6px;
+  }
+
+  .transaction-item select {
+    font-size: 10px;
+  }
+
+  .transaction-footer {
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    grid-template-columns: 90px 1fr;
+  }
+
+  .app-toast {
+    bottom: 92px;
+    max-width: calc(100% - 28px);
+    text-align: center;
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+  }
+
+  .hero-card h2 {
+    font-size: 29px;
+  }
+
+  .hero-card > div:first-child > p:last-child {
+    font-size: 13px;
+  }
+
+  .metric-card span {
+    font-size: 10px;
+  }
+
+  .metric-card strong {
+    font-size: 29px;
+  }
+
+  .metric-card small {
+    font-size: 9px;
+  }
+
+  .section-head h3 {
+    font-size: 18px;
+  }
+
+  .compact-copy strong {
+    font-size: 12px;
+  }
+
+  .compact-copy span,
+  .compact-number span {
+    font-size: 9px;
+  }
+
+  .compact-number strong {
+    font-size: 16px;
+  }
+
+  .inventory-card h3 {
+    font-size: 15px;
+  }
+
+  .holder-copy h3 {
+    font-size: 14px;
+  }
+
+  .activity-copy strong {
+    font-size: 11px;
+  }
+
+  .activity-copy span {
+    font-size: 9px;
+  }
+
+  .mobile-nav > button span {
+    font-size: 9px;
+  }
+}
