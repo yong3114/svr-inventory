@@ -2343,3 +2343,795 @@ body {
     font-size: 9px;
   }
 }
+
+/* =========================================================
+   V4 - Reservations, Jobs, Invoice Tracking
+   ========================================================= */
+
+.operation-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.operation-summary-card {
+  min-height: 92px;
+  padding: 17px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid #e3e5e8;
+  border-radius: 16px;
+  background: #fff;
+  color: #202328;
+  text-align: left;
+}
+
+.operation-summary-card:hover {
+  border-color: #cfd2d6;
+}
+
+.operation-summary-icon {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #f1f2f3;
+}
+
+.operation-summary-card > div:nth-child(2) {
+  display: grid;
+}
+
+.operation-summary-card span {
+  color: #737980;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.operation-summary-card strong {
+  margin-top: 1px;
+  font-size: 25px;
+}
+
+.operation-summary-card small {
+  margin-top: 2px;
+  color: #a0a4aa;
+  font-size: 9px;
+}
+
+.operation-summary-card.invoice-summary {
+  background: #151619;
+  border-color: #151619;
+  color: #fff;
+}
+
+.operation-summary-card.invoice-summary .operation-summary-icon {
+  background: #292b30;
+}
+
+.operation-summary-card.invoice-summary span,
+.operation-summary-card.invoice-summary small {
+  color: #aaaeb4;
+}
+
+.reservations-intro,
+.jobs-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.status-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.status-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  flex: 0 0 auto;
+  border: 1px solid #dfe1e4;
+  border-radius: 999px;
+  background: #fff;
+  color: #6c7178;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.status-tabs button.active {
+  border-color: #111214;
+  background: #111214;
+  color: #fff;
+}
+
+.reservation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.reservation-card,
+.job-card {
+  padding: 18px;
+  border: 1px solid #e3e5e8;
+  border-radius: 17px;
+  background: #fff;
+}
+
+.reservation-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.reservation-card-head h3 {
+  margin: 7px 0 3px;
+  font-size: 16px;
+}
+
+.reservation-card-head p {
+  margin: 0;
+  color: #92979e;
+  font-size: 10px;
+}
+
+.status-badge,
+.invoice-state {
+  width: fit-content;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: #f0f1f2;
+  color: #676c73;
+  font-size: 8px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.status-badge.reserved {
+  background: #fff4dd;
+  color: #8a5b00;
+}
+
+.status-badge.completed {
+  background: #edf7ef;
+  color: #28713b;
+}
+
+.status-badge.cancelled {
+  background: #f1f2f3;
+  color: #8a8f96;
+}
+
+.reservation-meta {
+  margin-top: 14px;
+  padding: 12px 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  border-top: 1px solid #eef0f1;
+  border-bottom: 1px solid #eef0f1;
+}
+
+.reservation-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #6f747b;
+  font-size: 10px;
+}
+
+.reservation-products-readable,
+.job-products {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.reservation-products-readable span,
+.job-products span {
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: #f3f4f5;
+  color: #4f545b;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.record-date {
+  display: block;
+  margin-top: 12px;
+  color: #a0a4aa;
+  font-size: 8px;
+}
+
+.reservation-actions {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.cancel-reservation {
+  color: #9b3731;
+}
+
+.wide-empty {
+  grid-column: 1 / -1;
+}
+
+.jobs-intro-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.job-list {
+  display: grid;
+  gap: 10px;
+}
+
+.job-card-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.job-no {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.job-no > div {
+  display: grid;
+}
+
+.job-no span {
+  color: #93979e;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .5px;
+}
+
+.job-no h3 {
+  margin: 3px 0 0;
+  font-size: 15px;
+}
+
+.invoice-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #fff2e7;
+  color: #9a530e;
+  white-space: nowrap;
+}
+
+.invoice-state.invoiced {
+  background: #edf7ef;
+  color: #28713b;
+}
+
+.job-details-grid {
+  margin-top: 15px;
+  padding: 13px 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1px solid #eef0f1;
+  border-bottom: 1px solid #eef0f1;
+}
+
+.job-details-grid > div {
+  padding: 0 12px;
+  display: grid;
+  border-left: 1px solid #eef0f1;
+}
+
+.job-details-grid > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.job-details-grid span {
+  color: #999da4;
+  font-size: 8px;
+}
+
+.job-details-grid strong {
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.job-card-actions {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.job-card-actions small {
+  color: #a0a4aa;
+  font-size: 8px;
+}
+
+.field-help {
+  display: block;
+  margin-top: 6px;
+  color: #999da4;
+  font-size: 9px;
+}
+
+.mini-modal {
+  width: min(430px, calc(100% - 28px));
+  padding: 20px;
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 25px 80px rgba(17, 18, 20, .22);
+}
+
+.mini-modal-head {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.mini-modal-head h2 {
+  margin: 4px 0 3px;
+  font-size: 20px;
+}
+
+.mini-modal-head p:last-child {
+  margin: 0;
+  color: #90959c;
+  font-size: 10px;
+}
+
+.mini-modal-actions {
+  margin-top: 18px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* Slightly larger common text */
+.sidebar-nav button {
+  font-size: 13px;
+}
+
+.section-head h3 {
+  font-size: 18px;
+}
+
+.compact-copy strong,
+.activity-copy strong {
+  font-size: 12px;
+}
+
+.compact-copy span,
+.compact-number span,
+.activity-copy span {
+  font-size: 10px;
+}
+
+.inventory-card h3,
+.holder-copy h3 {
+  font-size: 15px;
+}
+
+@media (max-width: 900px) {
+  .reservation-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .operation-summary-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 9px;
+  }
+
+  .operation-summary-card {
+    min-height: 112px;
+    padding: 14px;
+    display: block;
+  }
+
+  .operation-summary-icon {
+    width: 36px;
+    height: 36px;
+    margin-bottom: 9px;
+  }
+
+  .operation-summary-card strong {
+    font-size: 25px;
+  }
+
+  .operation-summary-card small {
+    display: none;
+  }
+
+  .reservations-intro,
+  .jobs-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .jobs-intro-actions {
+    width: 100%;
+  }
+
+  .jobs-intro-actions button {
+    flex: 1;
+  }
+
+  .reservation-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .reservation-actions {
+    grid-template-columns: 1fr 1.2fr;
+  }
+
+  .job-card {
+    padding: 15px;
+  }
+
+  .job-card-main {
+    align-items: flex-start;
+  }
+
+  .job-details-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .job-details-grid > div {
+    padding: 0;
+    border-left: 0;
+  }
+
+  .job-details-grid strong {
+    white-space: normal;
+  }
+
+  .job-card-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .job-card-actions button {
+    width: 100%;
+  }
+
+  .job-modal .transaction-modal-head h2 {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 430px) {
+  .operation-summary-card span {
+    font-size: 10px;
+  }
+
+  .reservation-card-head h3 {
+    font-size: 15px;
+  }
+
+  .status-tabs button {
+    font-size: 9px;
+  }
+}
+
+
+/* =========================================================
+   V5 — Roles, User Access, Void / Owner Delete, Audit
+   ========================================================= */
+
+.access-blocked-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f4f5f6;
+}
+
+.access-blocked-card {
+  width: min(470px, 100%);
+  padding: 30px;
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  border: 1px solid #e0e2e5;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(16, 18, 20, .08);
+}
+
+.access-blocked-card h2,
+.access-blocked-card p { margin: 0; }
+.access-blocked-card p { color: #747980; line-height: 1.65; }
+.access-blocked-card > strong { font-size: 12px; color: #555a61; }
+
+.mobile-nav-spacer { min-height: 58px; }
+
+.job-card-voided {
+  background: #fafafa;
+  border-style: dashed;
+  opacity: .88;
+}
+
+.invoice-state.voided {
+  background: #f2f2f2;
+  color: #6f747a;
+}
+
+.void-reason {
+  margin-top: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 3px;
+  border-radius: 10px;
+  background: #f5f5f5;
+}
+
+.void-reason strong { font-size: 9px; }
+.void-reason span { color: #777c83; font-size: 10px; }
+
+.v5-job-actions { align-items: center; }
+
+.job-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.danger-soft {
+  color: #9c4a44 !important;
+  background: #fff7f6 !important;
+  border-color: #ecd5d2 !important;
+}
+
+.danger-outline {
+  color: #a12c25 !important;
+  border-color: #d8aaa6 !important;
+}
+
+.audit-list {
+  margin-top: 12px;
+  display: grid;
+}
+
+.audit-row {
+  min-height: 58px;
+  padding: 10px 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border-top: 1px solid #eef0f1;
+}
+
+.audit-row:first-child { border-top: 0; }
+.audit-row time { color: #9da1a7; font-size: 8px; white-space: nowrap; }
+
+.users-intro { display: flex; align-items: flex-start; justify-content: space-between; }
+
+.access-role-guide {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 9px;
+}
+
+.access-role-guide > div {
+  min-height: 90px;
+  padding: 14px;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  border: 1px solid #e2e4e7;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.access-role-guide strong { font-size: 12px; }
+.access-role-guide span { color: #8b9096; font-size: 9px; line-height: 1.45; }
+
+.user-access-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.user-access-card {
+  padding: 17px;
+  display: grid;
+  gap: 14px;
+  border: 1px solid #e1e3e6;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.user-access-main {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.user-avatar-small {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #151619;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.user-access-main h3,
+.user-access-main p { margin: 0; }
+.user-access-main h3 { font-size: 14px; }
+.user-access-main p { margin-top: 3px; color: #8f949b; font-size: 9px; }
+
+.user-name-line { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.you-badge,
+.inactive-badge {
+  padding: 3px 5px;
+  border-radius: 5px;
+  background: #edf1ff;
+  color: #4d5d99;
+  font-size: 7px;
+  font-weight: 800;
+}
+.inactive-badge { background: #f3f3f3; color: #888d93; }
+
+.user-access-meta {
+  padding: 11px 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #eef0f1;
+  border-bottom: 1px solid #eef0f1;
+}
+
+.user-access-meta > div { display: grid; gap: 3px; }
+.user-access-meta span { color: #979ba1; font-size: 8px; }
+.user-access-meta strong { font-size: 10px; }
+
+.user-edit-button { width: 100%; }
+
+.access-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+.access-note > div { display: grid; gap: 4px; }
+.access-note strong { font-size: 11px; }
+.access-note span { color: #858a91; font-size: 9px; line-height: 1.5; }
+
+.access-modal { width: min(470px, calc(100% - 28px)); }
+
+.access-active-toggle {
+  margin-top: 12px;
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.access-active-toggle input { margin-top: 2px; }
+.access-active-toggle > div { display: grid; gap: 3px; }
+.access-active-toggle strong { font-size: 11px; }
+.access-active-toggle span { color: #8d9298; font-size: 9px; line-height: 1.4; }
+
+@media (max-width: 900px) {
+  .access-role-guide { grid-template-columns: repeat(2, 1fr); }
+  .user-access-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 720px) {
+  .job-action-buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+  .job-action-buttons button { width: 100%; }
+  .v5-job-actions { align-items: stretch; }
+  .access-role-guide { grid-template-columns: 1fr 1fr; }
+  .audit-row { grid-template-columns: auto minmax(0, 1fr); }
+  .audit-row time { grid-column: 2; }
+}
+
+@media (max-width: 420px) {
+  .access-role-guide { grid-template-columns: 1fr; }
+  .job-action-buttons { grid-template-columns: 1fr; }
+}
+
+
+/* =========================================================
+   V5.2 - Mobile More / Account entry
+   ========================================================= */
+
+.mobile-more-button {
+  display: none;
+}
+
+.mobile-more-button.active {
+  background: #17181b;
+  border-color: #17181b;
+  color: #fff;
+}
+
+@media (max-width: 900px) {
+  .mobile-more-button {
+    display: grid;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+}
+
+
+/* =========================================================
+   V5.3 - Add User + Password Setup
+   ========================================================= */
+
+.users-intro {
+  gap: 18px;
+}
+
+.invite-user-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.invite-security-note {
+  margin-top: 14px;
+  padding: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid #e5e7ea;
+  border-radius: 12px;
+  background: #f7f8f9;
+  color: #6f747b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.invite-security-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+@media (max-width: 720px) {
+  .users-intro {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .invite-user-button {
+    width: 100%;
+    justify-content: center;
+  }
+}
