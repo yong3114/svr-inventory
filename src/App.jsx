@@ -389,6 +389,9 @@ function App() {
   const [dataError, setDataError] = useState('')
 
   const [activeTab, setActiveTab] = useState('home')
+  const historyReadyRef = useRef(false)
+  const restoringHistoryRef = useRef(false)
+
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
@@ -451,6 +454,178 @@ function App() {
 
 
   const [operationsView, setOperationsView] = useState('board')
+
+  function closeTopOverlayForBack() {
+    if (passwordOpen) {
+      setPasswordOpen(false)
+      return true
+    }
+    if (inviteOpen) {
+      setInviteOpen(false)
+      return true
+    }
+    if (accessUser) {
+      setAccessUser(null)
+      return true
+    }
+    if (productEditor) {
+      setProductEditor(null)
+      return true
+    }
+    if (locationEditor) {
+      setLocationEditor(null)
+      return true
+    }
+    if (followupEditor) {
+      setFollowupEditor(null)
+      return true
+    }
+    if (completionBooking) {
+      setCompletionBooking(null)
+      return true
+    }
+    if (handoverBooking) {
+      setHandoverBooking(null)
+      return true
+    }
+    if (bookingEditor) {
+      setBookingEditor(null)
+      return true
+    }
+    if (invoiceJob) {
+      setInvoiceJob(null)
+      return true
+    }
+    if (jobModal) {
+      setJobModal(null)
+      return true
+    }
+    if (actionMode) {
+      setActionMode(null)
+      return true
+    }
+    if (mobileActionsOpen) {
+      setMobileActionsOpen(false)
+      return true
+    }
+
+    return false
+  }
+
+  function currentHistoryState() {
+    return {
+      ...(window.history.state || {}),
+      svrInventory: true,
+      activeTab,
+      operationsView,
+    }
+  }
+
+  function goBackInApp() {
+    if (typeof window === 'undefined') {
+      setActiveTab('home')
+      return
+    }
+
+    if (closeTopOverlayForBack()) return
+
+    if (window.history.state?.svrInventory) {
+      window.history.back()
+    } else {
+      setActiveTab('home')
+    }
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    if (!historyReadyRef.current) {
+      window.history.replaceState(
+        {
+          ...(window.history.state || {}),
+          svrInventory: true,
+          activeTab,
+          operationsView,
+        },
+        '',
+        window.location.href
+      )
+      historyReadyRef.current = true
+      return
+    }
+
+    if (restoringHistoryRef.current) {
+      restoringHistoryRef.current = false
+      return
+    }
+
+    const state = window.history.state
+
+    if (
+      state?.svrInventory &&
+      state.activeTab === activeTab &&
+      state.operationsView === operationsView
+    ) {
+      return
+    }
+
+    window.history.pushState(
+      currentHistoryState(),
+      '',
+      window.location.href
+    )
+  }, [activeTab, operationsView])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handlePopState = (event) => {
+      // Android / browser Back should close the current overlay first.
+      // Because overlays do not create their own URL, restore the current
+      // app page into browser history after closing the overlay.
+      if (closeTopOverlayForBack()) {
+        window.history.pushState(
+          currentHistoryState(),
+          '',
+          window.location.href
+        )
+        return
+      }
+
+      const state = event.state
+
+      if (state?.svrInventory) {
+        restoringHistoryRef.current = true
+        setActiveTab(state.activeTab || 'home')
+        setOperationsView(state.operationsView || 'board')
+      }
+      // If there is no SVR state left, the user is already at the first
+      // app page. At that point the browser may leave the website normally.
+    }
+
+    window.addEventListener('popstate', handlePopState)
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState)
+    }
+  }, [
+    activeTab,
+    operationsView,
+    passwordOpen,
+    inviteOpen,
+    accessUser,
+    productEditor,
+    locationEditor,
+    followupEditor,
+    completionBooking,
+    handoverBooking,
+    bookingEditor,
+    invoiceJob,
+    jobModal,
+    actionMode,
+    mobileActionsOpen,
+  ])
+
   const [bookingEditor, setBookingEditor] = useState(null)
   const [bookingForm, setBookingForm] = useState({
     customer_name: '',
@@ -2872,7 +3047,7 @@ function App() {
               setSettingsView={setSettingsView}
               openProductEditor={openProductEditor}
               openLocationEditor={openLocationEditor}
-              goBack={() => setActiveTab('more')}
+              goBack={goBackInApp}
             />
           )}
 
@@ -2896,7 +3071,7 @@ function App() {
               saveStockCount={saveStockCount}
               stockCountMessage={stockCountMessage}
               stockCountError={stockCountError}
-              goBack={() => setActiveTab('home')}
+              goBack={goBackInApp}
             />
           )}
         </main>
