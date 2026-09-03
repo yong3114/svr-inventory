@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowDownToLine,
   ArrowLeft,
@@ -6,26 +6,35 @@ import {
   BadgeCheck,
   Boxes,
   CalendarDays,
+  CalendarRange,
+  Camera,
   CheckCircle2,
   CircleUserRound,
+  ChevronLeft,
   ChevronRight,
   ClipboardList,
   FileText,
+  Image as ImageIcon,
   History,
   Home,
   KeyRound,
   LogOut,
+  MapPin,
+  MessageCircle,
   Menu,
   PackageCheck,
   PackageMinus,
   ReceiptText,
+  Phone,
   Plus,
   Trash2,
   RefreshCw,
   Search,
+  Star,
   Settings,
   ShieldCheck,
   ToggleLeft,
+  Upload,
   Pencil,
   SlidersHorizontal,
   UserCog,
@@ -34,16 +43,263 @@ import {
   Users,
   Warehouse,
   Wrench,
+  AlertTriangle,
   X,
   XCircle,
 } from 'lucide-react'
 import { supabase } from './lib/supabaseClient'
 import './App.css'
 
+
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
+
+let googleMapsLoaderPromise = null
+
+function loadGoogleMapsPlaces() {
+  if (typeof window === 'undefined') {
+    return Promise.reject(new Error('Google Maps is only available in the browser.'))
+  }
+
+  if (window.google?.maps?.importLibrary) {
+    return Promise.resolve(window.google.maps)
+  }
+
+  if (!GOOGLE_MAPS_API_KEY) {
+    return Promise.reject(
+      new Error('VITE_GOOGLE_MAPS_API_KEY is missing from .env.local')
+    )
+  }
+
+  if (googleMapsLoaderPromise) return googleMapsLoaderPromise
+
+  googleMapsLoaderPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById('svr-google-maps-js')
+
+    const waitForGoogle = () => {
+      let attempts = 0
+      const timer = window.setInterval(() => {
+        attempts += 1
+        if (window.google?.maps?.importLibrary) {
+          window.clearInterval(timer)
+          resolve(window.google.maps)
+        } else if (attempts > 100) {
+          window.clearInterval(timer)
+          reject(new Error('Google Maps took too long to load.'))
+        }
+      }, 100)
+    }
+
+    if (existing) {
+      waitForGoogle()
+      return
+    }
+
+    const script = document.createElement('script')
+    script.id = 'svr-google-maps-js'
+    script.async = true
+    script.src =
+      `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(
+        GOOGLE_MAPS_API_KEY
+      )}&loading=async&libraries=places&v=weekly&region=MY&language=en`
+    script.onload = waitForGoogle
+    script.onerror = () =>
+      reject(new Error('Unable to load Google Maps JavaScript API.'))
+    document.head.appendChild(script)
+  })
+
+  return googleMapsLoaderPromise
+}
+
+function GooglePlacesAddress({
+  currentAddress,
+  onPlaceSelected,
+}) {
+  const hostRef = useRef(null)
+  const elementRef = useRef(null)
+  const [mapsState, setMapsState] = useState(
+    GOOGLE_MAPS_API_KEY ? 'loading' : 'missing'
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    let autocompleteElement = null
+    let selectionHandler = null
+
+    async function mountAutocomplete() {
+      if (!GOOGLE_MAPS_API_KEY) {
+        setMapsState('missing')
+        return
+      }
+
+      try {
+        await loadGoogleMapsPlaces()
+        const { PlaceAutocompleteElement } =
+          await window.google.maps.importLibrary('places')
+
+        if (cancelled || !hostRef.current) return
+
+        autocompleteElement = new PlaceAutocompleteElement()
+        autocompleteElement.placeholder =
+          currentAddress || 'Search condo / residence / street...'
+
+        // Bias the experience toward Malaysia without hard-blocking
+        // Singapore / other nearby jobs.
+        try {
+          autocompleteElement.region = 'my'
+        } catch {
+          // Some weekly builds may not expose a writable region property.
+        }
+
+        selectionHandler = async (event) => {
+          try {
+            const place = event.placePrediction.toPlace()
+            await place.fetchFields({
+              fields: [
+                'id',
+                'displayName',
+                'formattedAddress',
+                'location',
+              ],
+            })
+
+            const location = place.location
+            onPlaceSelected({
+              place_name: place.displayName || '',
+              installation_address:
+                place.formattedAddress || place.displayName || '',
+              google_place_id: place.id || '',
+              latitude:
+                typeof location?.lat === 'function'
+                  ? location.lat()
+                  : location?.lat ?? null,
+              longitude:
+                typeof location?.lng === 'function'
+                  ? location.lng()
+                  : location?.lng ?? null,
+            })
+          } catch (error) {
+            console.error('Google place selection failed', error)
+          }
+        }
+
+        autocompleteElement.addEventListener(
+          'gmp-select',
+          selectionHandler
+        )
+
+        hostRef.current.innerHTML = ''
+        hostRef.current.appendChild(autocompleteElement)
+        elementRef.current = autocompleteElement
+        setMapsState('ready')
+      } catch (error) {
+        console.error(error)
+        if (!cancelled) setMapsState('error')
+      }
+    }
+
+    mountAutocomplete()
+
+    return () => {
+      cancelled = true
+      if (autocompleteElement && selectionHandler) {
+        autocompleteElement.removeEventListener(
+          'gmp-select',
+          selectionHandler
+        )
+      }
+      if (hostRef.current) hostRef.current.innerHTML = ''
+      elementRef.current = null
+    }
+  }, [])
+
+  return (
+    <div className="google-place-control">
+      <div ref={hostRef} className="google-place-host" />
+
+      {mapsState === 'loading' && (
+        <small>Loading Google Places...</small>
+      )}
+      {mapsState === 'missing' && (
+        <small className="maps-warning">
+          Google Maps API key is not configured. You can still type the
+          address manually below.
+        </small>
+      )}
+      {mapsState === 'error' && (
+        <small className="maps-warning">
+          Google Places could not load. Check API restrictions / billing,
+          or type the address manually below.
+        </small>
+      )}
+      {mapsState === 'ready' && (
+        <small>
+          Start typing a condo, residence or street and select the Google
+          suggestion.
+        </small>
+      )}
+    </div>
+  )
+}
+
+function googleMapsUrl(record) {
+  const address =
+    record?.installation_address ||
+    record?.place_name ||
+    record?.installation_area
+
+  if (!address && record?.latitude == null && record?.longitude == null) {
+    return ''
+  }
+
+  const query =
+    record?.latitude != null && record?.longitude != null
+      ? `${record.latitude},${record.longitude}`
+      : address
+
+  const placePart = record?.google_place_id
+    ? `&query_place_id=${encodeURIComponent(record.google_place_id)}`
+    : ''
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    query
+  )}${placePart}`
+}
+
+function whatsappUrl(phone) {
+  if (!phone) return ''
+  let digits = String(phone).replace(/\D/g, '')
+  if (digits.startsWith('0')) digits = `60${digits.slice(1)}`
+  if (!digits.startsWith('60') && digits.length >= 9) digits = `60${digits}`
+  return digits ? `https://wa.me/${digits}` : ''
+}
+
+function formatLocalDateKey(date) {
+  const d = new Date(date)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function startOfWeekMonday(date) {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const day = d.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  d.setDate(d.getDate() + diff)
+  return d
+}
+
+function addDays(date, count) {
+  const d = new Date(date)
+  d.setDate(d.getDate() + count)
+  return d
+}
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'inventory', label: 'Inventory', icon: Boxes },
-  { id: 'reservations', label: 'Reservations', icon: PackageCheck },
+  { id: 'operations', label: 'Operations', icon: CalendarDays },
   { id: 'jobs', label: 'Jobs', icon: FileText },
   { id: 'holders', label: 'Stock Holders', icon: Users },
   { id: 'activity', label: 'Activity', icon: History },
@@ -186,6 +442,69 @@ function App() {
   const [locationSaving, setLocationSaving] = useState(false)
   const [locationError, setLocationError] = useState('')
 
+
+  const [operationsView, setOperationsView] = useState('board')
+  const [bookingEditor, setBookingEditor] = useState(null)
+  const [bookingForm, setBookingForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    unit_no: '',
+    installation_area: '',
+    installation_address: '',
+    place_name: '',
+    google_place_id: '',
+    latitude: null,
+    longitude: null,
+    booking_type: 'product_confirmed',
+    promotion_name: '',
+    selling_price: '',
+    deposit_amount: '',
+    payment_status: 'deposit_paid',
+    schedule_type: 'tbc',
+    installation_date: '',
+    installation_time: '',
+    estimated_installation: '',
+    installer_location_id: '',
+    remark: '',
+  })
+  const [bookingItems, setBookingItems] = useState([{ product_id: '', quantity: 1 }])
+  const [bookingSaving, setBookingSaving] = useState(false)
+  const [bookingError, setBookingError] = useState('')
+
+  const [handoverBooking, setHandoverBooking] = useState(null)
+  const [handoverForm, setHandoverForm] = useState({ from_location_id: '', to_location_id: '' })
+  const [handoverSaving, setHandoverSaving] = useState(false)
+  const [handoverError, setHandoverError] = useState('')
+
+  const [completionBooking, setCompletionBooking] = useState(null)
+  const [completionForm, setCompletionForm] = useState({
+    stock_location_id: '',
+    customer_taught: false,
+    review_asked: false,
+    review_received: false,
+    completion_remark: '',
+    pending_settle: false,
+    pending_issue: '',
+  })
+  const [completionFiles, setCompletionFiles] = useState([])
+  const [completionSaving, setCompletionSaving] = useState(false)
+  const [completionError, setCompletionError] = useState('')
+
+  const [followups, setFollowups] = useState([])
+  const [jobPhotos, setJobPhotos] = useState([])
+  const [followupEditor, setFollowupEditor] = useState(null)
+  const [followupForm, setFollowupForm] = useState({
+    technician_location_id: '',
+    scheduled_date: '',
+    scheduled_time: '',
+    remark: '',
+    resolution_note: '',
+    review_asked: false,
+    review_received: false,
+  })
+  const [followupSaving, setFollowupSaving] = useState(false)
+  const [followupError, setFollowupError] = useState('')
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
@@ -256,6 +575,16 @@ function App() {
       )
       .on(
         'postgres_changes',
+        { event: '*', schema: 'public', table: 'job_followups' },
+        refreshSoon
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'job_photos' },
+        refreshSoon
+      )
+      .on(
+        'postgres_changes',
         { event: '*', schema: 'public', table: 'user_profiles' },
         refreshSoon
       )
@@ -303,6 +632,8 @@ function App() {
     setAuditEvents([])
     setProductCatalog([])
     setAllLocations([])
+    setFollowups([])
+    setJobPhotos([])
     setProfileLoading(true)
     setActiveTab('home')
   }
@@ -322,19 +653,13 @@ function App() {
       auditResult,
       catalogResult,
       allLocationsResult,
+      followupsResult,
+      photosResult,
     ] = await Promise.all([
       supabase.rpc('get_inventory_summary'),
-      supabase
-        .from('locations')
-        .select('*')
-        .eq('active', true)
-        .order('created_at'),
+      supabase.from('locations').select('*').eq('active', true).order('created_at'),
       supabase.rpc('get_stock_by_location'),
-      supabase
-        .from('stock_movements')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(150),
+      supabase.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(180),
       supabase
         .from('reservations')
         .select('*, reservation_items(product_id, quantity)')
@@ -347,39 +672,44 @@ function App() {
         .from('user_profiles')
         .select('user_id, email, display_name, role, location_id, active, created_at, updated_at')
         .order('created_at'),
-      supabase
-        .from('audit_events')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(80),
+      supabase.from('audit_events').select('*').order('created_at', { ascending: false }).limit(100),
       supabase
         .from('products')
         .select('id, sku, name, category, app_variant, minimum_stock, active, created_at')
-        .order('category')
-        .order('name'),
-      supabase
-        .from('locations')
-        .select('*')
-        .order('created_at'),
+        .order('category').order('name'),
+      supabase.from('locations').select('*').order('created_at'),
+      supabase.from('job_followups').select('*').order('created_at', { ascending: false }),
+      supabase.from('job_photos').select('*').order('created_at', { ascending: false }),
     ])
 
     const firstError =
-      inventoryResult.error ||
-      locationsResult.error ||
-      stockResult.error ||
-      movementsResult.error ||
-      reservationsResult.error ||
-      jobsResult.error ||
-      profilesResult.error ||
-      auditResult.error ||
-      catalogResult.error ||
-      allLocationsResult.error
+      inventoryResult.error || locationsResult.error || stockResult.error ||
+      movementsResult.error || reservationsResult.error || jobsResult.error ||
+      profilesResult.error || auditResult.error || catalogResult.error ||
+      allLocationsResult.error || followupsResult.error || photosResult.error
 
     if (firstError) {
       console.error(firstError)
       setDataError('读取资料失败，请 Refresh 再试。')
     } else {
       const nextProfiles = profilesResult.data || []
+      let nextPhotos = photosResult.data || []
+
+      const paths = nextPhotos.map((item) => item.storage_path).filter(Boolean)
+      if (paths.length > 0) {
+        const { data: signed, error: signedError } = await supabase.storage
+          .from('job-photos')
+          .createSignedUrls(paths, 3600)
+
+        if (!signedError && signed) {
+          const urlMap = new Map(signed.map((item, index) => [paths[index], item.signedUrl]))
+          nextPhotos = nextPhotos.map((item) => ({
+            ...item,
+            signed_url: urlMap.get(item.storage_path) || '',
+          }))
+        }
+      }
+
       setInventory(inventoryResult.data || [])
       setLocations(locationsResult.data || [])
       setLocationStock(stockResult.data || [])
@@ -390,11 +720,9 @@ function App() {
       setAuditEvents(auditResult.data || [])
       setProductCatalog(catalogResult.data || [])
       setAllLocations(allLocationsResult.data || [])
-      setProfile(
-        nextProfiles.find(
-          (item) => item.user_id === session?.user?.id
-        ) || null
-      )
+      setFollowups(followupsResult.data || [])
+      setJobPhotos(nextPhotos)
+      setProfile(nextProfiles.find((item) => item.user_id === session?.user?.id) || null)
     }
 
     setProfileLoading(false)
@@ -842,6 +1170,11 @@ function App() {
 
     if (typed !== 'DELETE') return
 
+    const photoPaths = jobPhotos
+      .filter((item) => item.job_id === job.id)
+      .map((item) => item.storage_path)
+      .filter(Boolean)
+
     const { error } = await supabase.rpc('delete_job_permanently', {
       p_job_id: job.id,
     })
@@ -850,6 +1183,13 @@ function App() {
       console.error(error)
       showToast(error.message || 'Delete failed')
       return
+    }
+
+    if (photoPaths.length > 0) {
+      const { error: photoDeleteError } = await supabase.storage
+        .from('job-photos')
+        .remove(photoPaths)
+      if (photoDeleteError) console.error(photoDeleteError)
     }
 
     showToast(`${job.job_no} permanently deleted`)
@@ -1191,6 +1531,330 @@ function App() {
 
     showToast('Password updated successfully')
   }
+
+  function bookingStage(booking) {
+    if (booking.booking_type === 'promotion_only') return 'promotion'
+    if (booking.schedule_type === 'exact') return 'scheduled'
+    if (booking.schedule_type === 'estimated') return 'estimated'
+    return 'tbc'
+  }
+
+  function openNewBooking() {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    setMobileActionsOpen(false)
+    setBookingEditor({ type: 'new' })
+    setBookingForm({
+      customer_name: '', customer_phone: '', unit_no: '',
+      installation_area: '', installation_address: '', place_name: '',
+      google_place_id: '', latitude: null, longitude: null,
+      booking_type: 'product_confirmed', promotion_name: '', selling_price: '',
+      deposit_amount: '', payment_status: 'deposit_paid', schedule_type: 'tbc',
+      installation_date: '', installation_time: '', estimated_installation: '',
+      installer_location_id: '', remark: '',
+    })
+    setBookingItems([{ product_id: '', quantity: 1 }])
+    setBookingError('')
+  }
+
+  function openEditBooking(booking, forceProduct = false) {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    setBookingEditor({ type: 'edit', booking })
+    setBookingForm({
+      customer_name: booking.customer_name || '',
+      customer_phone: booking.customer_phone || '',
+      unit_no: booking.unit_no || '',
+      installation_area: booking.installation_area || '',
+      installation_address: booking.installation_address || '',
+      place_name: booking.place_name || '',
+      google_place_id: booking.google_place_id || '',
+      latitude: booking.latitude ?? null,
+      longitude: booking.longitude ?? null,
+      booking_type: forceProduct ? 'product_confirmed' : (booking.booking_type || 'product_confirmed'),
+      promotion_name: booking.promotion_name || '',
+      selling_price: booking.selling_price ?? '',
+      deposit_amount: booking.deposit_amount ?? '',
+      payment_status: booking.payment_status || 'not_paid',
+      schedule_type: booking.schedule_type || (booking.installation_date ? 'exact' : 'tbc'),
+      installation_date: booking.installation_date || '',
+      installation_time: booking.installation_time ? String(booking.installation_time).slice(0, 5) : '',
+      estimated_installation: booking.estimated_installation || '',
+      installer_location_id: booking.installer_location_id || '',
+      remark: booking.remark || '',
+    })
+    const items = (booking.reservation_items || []).map((item) => ({
+      product_id: item.product_id,
+      quantity: Number(item.quantity),
+    }))
+    setBookingItems(items.length ? items : [{ product_id: '', quantity: 1 }])
+    setBookingError('')
+  }
+
+  function updateBookingForm(field, value) {
+    setBookingForm((current) => ({ ...current, [field]: value }))
+    setBookingError('')
+  }
+
+  function updateBookingItem(index, field, value) {
+    setBookingItems((current) => current.map((item, i) =>
+      i === index
+        ? { ...item, [field]: field === 'quantity' ? Math.max(1, Number(value) || 1) : value }
+        : item
+    ))
+    setBookingError('')
+  }
+
+  function addBookingItem() {
+    setBookingItems((current) => [...current, { product_id: '', quantity: 1 }])
+  }
+
+  function removeBookingItem(index) {
+    setBookingItems((current) => current.length === 1
+      ? [{ product_id: '', quantity: 1 }]
+      : current.filter((_, i) => i !== index))
+  }
+
+  async function saveBookingV6() {
+    if (!bookingEditor) return
+    const cleanItems = bookingForm.booking_type === 'product_confirmed'
+      ? bookingItems.filter((item) => item.product_id).map((item) => ({
+          product_id: item.product_id,
+          quantity: Number(item.quantity),
+        }))
+      : []
+
+    if (!bookingForm.customer_name.trim()) return setBookingError('Customer Name is required.')
+    if (bookingForm.booking_type === 'product_confirmed' && cleanItems.length === 0) {
+      return setBookingError('Confirmed product booking needs at least one item.')
+    }
+
+    setBookingSaving(true)
+    setBookingError('')
+    const params = {
+      p_customer_name: bookingForm.customer_name.trim(),
+      p_customer_phone: bookingForm.customer_phone.trim() || null,
+      p_unit_no: bookingForm.unit_no.trim() || null,
+      p_installation_area: bookingForm.installation_area.trim() || null,
+      p_installation_address:
+        bookingForm.installation_address.trim() || null,
+      p_place_name: bookingForm.place_name.trim() || null,
+      p_google_place_id: bookingForm.google_place_id.trim() || null,
+      p_latitude:
+        bookingForm.latitude === null ||
+        bookingForm.latitude === ''
+          ? null
+          : Number(bookingForm.latitude),
+      p_longitude:
+        bookingForm.longitude === null ||
+        bookingForm.longitude === ''
+          ? null
+          : Number(bookingForm.longitude),
+      p_booking_type: bookingForm.booking_type,
+      p_promotion_name: bookingForm.promotion_name.trim() || null,
+      p_selling_price: bookingForm.selling_price === '' ? null : Number(bookingForm.selling_price),
+      p_deposit_amount: bookingForm.deposit_amount === '' ? 0 : Number(bookingForm.deposit_amount),
+      p_payment_status: bookingForm.payment_status,
+      p_schedule_type: bookingForm.schedule_type,
+      p_installation_date: bookingForm.schedule_type === 'exact' ? (bookingForm.installation_date || null) : null,
+      p_installation_time: bookingForm.schedule_type === 'exact' ? (bookingForm.installation_time || null) : null,
+      p_estimated_installation: bookingForm.schedule_type === 'estimated' ? (bookingForm.estimated_installation.trim() || null) : null,
+      p_installer_location_id: bookingForm.installer_location_id || null,
+      p_remark: bookingForm.remark.trim() || null,
+      p_items: cleanItems,
+    }
+
+    let result
+    if (bookingEditor.type === 'new') {
+      result = await supabase.rpc('create_booking_v61', params)
+    } else {
+      result = await supabase.rpc('update_booking_v61', {
+        p_reservation_id: bookingEditor.booking.id,
+        ...params,
+      })
+    }
+
+    if (result.error) {
+      console.error(result.error)
+      setBookingError(result.error.message || 'Unable to save booking.')
+      setBookingSaving(false)
+      return
+    }
+
+    setBookingEditor(null)
+    setBookingSaving(false)
+    showToast(bookingEditor.type === 'new' ? 'Booking created' : 'Booking updated')
+    await loadAppData()
+    setActiveTab('operations')
+  }
+
+  function openHandover(booking) {
+    const warehouse = locations.find((item) => item.code === 'SVR-JB') || locations.find((item) => item.location_type === 'warehouse') || locations[0]
+    setHandoverBooking(booking)
+    setHandoverForm({
+      from_location_id: booking.handover_from_location_id || warehouse?.id || '',
+      to_location_id: booking.installer_location_id || '',
+    })
+    setHandoverError('')
+  }
+
+  async function saveHandover() {
+    if (!handoverBooking) return
+    if (!handoverForm.from_location_id || !handoverForm.to_location_id) {
+      return setHandoverError('Select From and Technician / To location.')
+    }
+    setHandoverSaving(true)
+    const { error } = await supabase.rpc('handover_booking_stock_v6', {
+      p_reservation_id: handoverBooking.id,
+      p_from_location_id: handoverForm.from_location_id,
+      p_to_location_id: handoverForm.to_location_id,
+    })
+    if (error) {
+      console.error(error)
+      setHandoverError(error.message || 'Handover failed.')
+      setHandoverSaving(false)
+      return
+    }
+    setHandoverBooking(null)
+    setHandoverSaving(false)
+    showToast('Stock handed over to technician')
+    await loadAppData()
+  }
+
+  function openCompleteInstallation(booking) {
+    const defaultLocation = isTechnician
+      ? profile?.location_id
+      : booking.installer_location_id || (locations.find((item) => item.code === 'SVR-JB')?.id || locations[0]?.id)
+    setCompletionBooking(booking)
+    setCompletionForm({
+      stock_location_id: defaultLocation || '',
+      customer_taught: false,
+      review_asked: false,
+      review_received: false,
+      completion_remark: '',
+      pending_settle: false,
+      pending_issue: '',
+    })
+    setCompletionFiles([])
+    setCompletionError('')
+  }
+
+  async function uploadJobPhotos(jobId, files) {
+    const failed = []
+    for (const file of files) {
+      const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const path = `${jobId}/${safeName}`
+      const { error: uploadError } = await supabase.storage
+        .from('job-photos')
+        .upload(path, file, { upsert: false, contentType: file.type || undefined })
+      if (uploadError) {
+        console.error(uploadError)
+        failed.push(file.name)
+        continue
+      }
+      const { error: registerError } = await supabase.rpc('register_job_photo_v6', {
+        p_job_id: jobId,
+        p_storage_path: path,
+        p_file_name: file.name,
+        p_note: null,
+      })
+      if (registerError) {
+        console.error(registerError)
+        failed.push(file.name)
+      }
+    }
+    return failed
+  }
+
+  async function saveCompleteInstallation() {
+    if (!completionBooking) return
+    if (!completionForm.stock_location_id) return setCompletionError('Select the stock holder / technician.')
+    if (completionForm.pending_settle && !completionForm.pending_issue.trim()) {
+      return setCompletionError('Pending Settle must state what is not completed.')
+    }
+
+    setCompletionSaving(true)
+    setCompletionError('')
+    const { data, error } = await supabase.rpc('complete_booking_installation_v6', {
+      p_reservation_id: completionBooking.id,
+      p_stock_location_id: completionForm.stock_location_id,
+      p_customer_taught: completionForm.customer_taught,
+      p_review_asked: completionForm.review_asked,
+      p_review_received: completionForm.review_received,
+      p_completion_remark: completionForm.completion_remark.trim() || null,
+      p_pending_issue: completionForm.pending_settle ? completionForm.pending_issue.trim() : null,
+    })
+
+    if (error) {
+      console.error(error)
+      setCompletionError(error.message || 'Unable to complete installation.')
+      setCompletionSaving(false)
+      return
+    }
+
+    const jobId = data?.[0]?.job_id
+    const jobNo = data?.[0]?.job_no
+    let failed = []
+    if (jobId && completionFiles.length) failed = await uploadJobPhotos(jobId, completionFiles)
+
+    setCompletionBooking(null)
+    setCompletionSaving(false)
+    showToast(failed.length ? `${jobNo || 'Job'} saved • ${failed.length} photo(s) failed` : `${jobNo || 'Job'} completed`)
+    await loadAppData()
+    setActiveTab(completionForm.pending_settle ? 'operations' : 'jobs')
+  }
+
+  function openFollowup(followup, mode = 'schedule') {
+    const job = jobs.find((item) => item.id === followup.job_id)
+    setFollowupEditor({ followup, job, mode })
+    setFollowupForm({
+      technician_location_id: followup.technician_location_id || job?.technician_location_id || '',
+      scheduled_date: followup.scheduled_date || '',
+      scheduled_time: followup.scheduled_time ? String(followup.scheduled_time).slice(0, 5) : '',
+      remark: followup.remark || '',
+      resolution_note: '',
+      review_asked: Boolean(job?.review_asked),
+      review_received: Boolean(job?.review_received),
+    })
+    setFollowupError('')
+  }
+
+  async function saveFollowup() {
+    if (!followupEditor) return
+    setFollowupSaving(true)
+    setFollowupError('')
+    let result
+    if (followupEditor.mode === 'resolve') {
+      if (!followupForm.resolution_note.trim()) {
+        setFollowupError('Please note what was settled.')
+        setFollowupSaving(false)
+        return
+      }
+      result = await supabase.rpc('resolve_followup_v6', {
+        p_followup_id: followupEditor.followup.id,
+        p_resolution_note: followupForm.resolution_note.trim(),
+        p_review_asked: followupForm.review_asked,
+        p_review_received: followupForm.review_received,
+      })
+    } else {
+      result = await supabase.rpc('schedule_followup_v6', {
+        p_followup_id: followupEditor.followup.id,
+        p_technician_location_id: followupForm.technician_location_id || null,
+        p_scheduled_date: followupForm.scheduled_date || null,
+        p_scheduled_time: followupForm.scheduled_time || null,
+        p_remark: followupForm.remark.trim() || null,
+      })
+    }
+    if (result.error) {
+      console.error(result.error)
+      setFollowupError(result.error.message || 'Unable to update follow-up.')
+      setFollowupSaving(false)
+      return
+    }
+    setFollowupEditor(null)
+    setFollowupSaving(false)
+    showToast(followupEditor.mode === 'resolve' ? 'Pending issue settled' : 'Follow-up scheduled')
+    await loadAppData()
+  }
+
 
   function showToast(message) {
     setToast(message)
@@ -1914,7 +2578,7 @@ function App() {
   const visibleNavItems = NAV_ITEMS.filter((item) => {
     if (isManagement) return true
     if (isTechnician) {
-      return ['home', 'inventory', 'jobs', 'activity', 'more'].includes(
+      return ['home', 'inventory', 'operations', 'jobs', 'activity', 'more'].includes(
         item.id
       )
     }
@@ -1933,8 +2597,8 @@ function App() {
       ? 'Dashboard'
       : activeTab === 'inventory'
         ? 'Inventory'
-        : activeTab === 'reservations'
-          ? 'Reservations'
+        : activeTab === 'operations'
+          ? 'Operations'
           : activeTab === 'jobs'
             ? 'Jobs & Invoices'
             : activeTab === 'holders'
@@ -2058,6 +2722,7 @@ function App() {
               movements={visibleMovements}
               reservations={visibleReservations}
               jobs={visibleJobs}
+              followups={followups}
               productDisplayName={productDisplayName}
               productById={productById}
               movementTitle={movementTitle}
@@ -2077,6 +2742,32 @@ function App() {
               categoryFilter={categoryFilter}
               setCategoryFilter={setCategoryFilter}
               productDisplayName={productDisplayName}
+              canAddProduct={isManagement}
+              openAddProduct={() => openProductEditor(null)}
+            />
+          )}
+
+          {activeTab === 'operations' && (
+            <OperationsPage
+              bookings={visibleReservations}
+              jobs={visibleJobs}
+              followups={followups}
+              productById={productById}
+              productDisplayName={productDisplayName}
+              locationById={locationById}
+              calendarLocations={locations}
+              currentRole={currentRole}
+              profile={profile}
+              operationsView={operationsView}
+              setOperationsView={setOperationsView}
+              openNewBooking={openNewBooking}
+              openEditBooking={openEditBooking}
+              openHandover={openHandover}
+              openCompleteInstallation={openCompleteInstallation}
+              cancelReservation={cancelReservation}
+              openFollowup={openFollowup}
+              canManage={isManagement}
+              canCompleteJobs={canCompleteJobs}
             />
           )}
 
@@ -2115,6 +2806,9 @@ function App() {
               voidJob={voidJob}
               deleteJobPermanently={deleteJobPermanently}
               isOwner={isOwner}
+              jobPhotos={jobPhotos}
+              followups={followups}
+              openFollowup={openFollowup}
             />
           )}
 
@@ -2231,13 +2925,13 @@ function App() {
             <div className="mobile-nav-spacer" />
           )}
 
-          {isManagement ? (
+          {(isManagement || isTechnician) ? (
             <button
-              className={activeTab === 'reservations' ? 'active' : ''}
-              onClick={() => setActiveTab('reservations')}
+              className={activeTab === 'operations' ? 'active' : ''}
+              onClick={() => setActiveTab('operations')}
             >
-              <PackageCheck size={19} />
-              <span>Reserve</span>
+              <CalendarDays size={19} />
+              <span>Operations</span>
             </button>
           ) : (
             <button
@@ -2249,7 +2943,7 @@ function App() {
             </button>
           )}
 
-          {isManagement ? (
+          {(isManagement || isTechnician) ? (
             <button
               className={activeTab === 'jobs' ? 'active' : ''}
               onClick={() => setActiveTab('jobs')}
@@ -2292,6 +2986,17 @@ function App() {
               </button>
             </div>
 
+            {isManagement && (
+              <button className="sheet-action" onClick={openNewBooking}>
+                <div className="action-icon dark"><CalendarDays size={20} /></div>
+                <div>
+                  <strong>New Booking</strong>
+                  <span>Promotion booking, reservation or scheduled install</span>
+                </div>
+                <ChevronRight size={18} />
+              </button>
+            )}
+
             {canManageInventory && (
               <>
                 <button
@@ -2321,37 +3026,7 @@ function App() {
                   </div>
                   <ChevronRight size={18} />
                 </button>
-
-                <button
-                  className="sheet-action"
-                  onClick={() => openAction('reserve')}
-                >
-                  <div className="action-icon">
-                    <PackageCheck size={20} />
-                  </div>
-                  <div>
-                    <strong>Reserve</strong>
-                    <span>Reserve stock for customer</span>
-                  </div>
-                  <ChevronRight size={18} />
-                </button>
               </>
-            )}
-
-            {canCompleteJobs && (
-              <button
-                className="sheet-action"
-                onClick={openDirectJob}
-              >
-                <div className="action-icon dark">
-                  <FileText size={20} />
-                </div>
-                <div>
-                  <strong>Complete Job</strong>
-                  <span>Customer + lock + lock body + installer</span>
-                </div>
-                <ChevronRight size={18} />
-              </button>
             )}
 
             {canManageInventory && (
@@ -2499,6 +3174,65 @@ function App() {
           close={closePasswordChange}
           save={savePasswordChange}
           inviteLanding={inviteLanding}
+        />
+      )}
+
+      {bookingEditor && (
+        <BookingV6Modal
+          editor={bookingEditor}
+          form={bookingForm}
+          items={bookingItems}
+          products={productCatalog.filter((item) => item.active !== false)}
+          locations={locations}
+          saving={bookingSaving}
+          error={bookingError}
+          updateForm={updateBookingForm}
+          updateItem={updateBookingItem}
+          addItem={addBookingItem}
+          removeItem={removeBookingItem}
+          close={() => !bookingSaving && setBookingEditor(null)}
+          save={saveBookingV6}
+        />
+      )}
+
+      {handoverBooking && (
+        <HandoverV6Modal
+          booking={handoverBooking}
+          form={handoverForm}
+          setForm={setHandoverForm}
+          locations={locations}
+          saving={handoverSaving}
+          error={handoverError}
+          close={() => !handoverSaving && setHandoverBooking(null)}
+          save={saveHandover}
+        />
+      )}
+
+      {completionBooking && (
+        <CompleteInstallationV6Modal
+          booking={completionBooking}
+          form={completionForm}
+          setForm={setCompletionForm}
+          files={completionFiles}
+          setFiles={setCompletionFiles}
+          locations={allowedJobLocations}
+          saving={completionSaving}
+          error={completionError}
+          close={() => !completionSaving && setCompletionBooking(null)}
+          save={saveCompleteInstallation}
+        />
+      )}
+
+      {followupEditor && (
+        <FollowupV6Modal
+          editor={followupEditor}
+          form={followupForm}
+          setForm={setFollowupForm}
+          locations={locations}
+          saving={followupSaving}
+          error={followupError}
+          close={() => !followupSaving && setFollowupEditor(null)}
+          save={saveFollowup}
         />
       )}
 
@@ -2866,6 +3600,895 @@ function ActionModal({
 }
 
 
+
+
+function OperationsPage({
+  bookings,
+  jobs,
+  followups,
+  productById,
+  productDisplayName,
+  locationById,
+  calendarLocations,
+  currentRole,
+  profile,
+  operationsView,
+  setOperationsView,
+  openNewBooking,
+  openEditBooking,
+  openHandover,
+  openCompleteInstallation,
+  cancelReservation,
+  openFollowup,
+  canManage,
+  canCompleteJobs,
+}) {
+  const activeBookings = bookings.filter((item) => item.status === 'reserved')
+  const promotion = activeBookings.filter((item) => item.booking_type === 'promotion_only')
+  const tbc = activeBookings.filter((item) => item.booking_type !== 'promotion_only' && item.schedule_type === 'tbc')
+  const estimated = activeBookings.filter((item) => item.booking_type !== 'promotion_only' && item.schedule_type === 'estimated')
+  const scheduled = activeBookings.filter((item) => item.booking_type !== 'promotion_only' && item.schedule_type === 'exact')
+  const pendingFollowups = followups.filter((item) => ['pending', 'scheduled'].includes(item.status))
+
+  const now = new Date()
+  const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const todayBookings = scheduled.filter((item) => item.installation_date === localDate)
+  const todayFollowups = pendingFollowups.filter((item) => item.scheduled_date === localDate)
+
+  const bookingCard = (booking) => (
+    <BookingCardV6
+      key={booking.id}
+      booking={booking}
+      productById={productById}
+      productDisplayName={productDisplayName}
+      locationById={locationById}
+      canManage={canManage}
+      canCompleteJobs={canCompleteJobs}
+      openEditBooking={openEditBooking}
+      openHandover={openHandover}
+      openCompleteInstallation={openCompleteInstallation}
+      cancelReservation={cancelReservation}
+    />
+  )
+
+  return (
+    <div className="page-stack fade-in">
+      <section className="surface-card page-intro operations-intro">
+        <div>
+          <p className="kicker">SVR DAILY OPERATIONS</p>
+          <h2>Bookings & Installation Planner</h2>
+          <p>Promotion booking → reserve stock → schedule → hand over → install → pending settle.</p>
+        </div>
+        {canManage && (
+          <button className="primary-button" onClick={openNewBooking}>
+            <Plus size={16} /> New Booking
+          </button>
+        )}
+      </section>
+
+      <section className="ops-kpi-grid">
+        <div><span>Promotion / Product TBC</span><strong>{promotion.length}</strong><small>No stock reserved</small></div>
+        <div><span>Installation TBC</span><strong>{tbc.length}</strong><small>Products reserved</small></div>
+        <div><span>Estimated</span><strong>{estimated.length}</strong><small>Waiting exact date</small></div>
+        <div className="warning"><span>Pending Settle</span><strong>{pendingFollowups.length}</strong><small>Need follow-up</small></div>
+      </section>
+
+      <div className="status-tabs operations-tabs">
+        {[
+          ['board', 'Board'],
+          ['calendar', 'Calendar'],
+          ['today', `Today ${todayBookings.length + todayFollowups.length}`],
+          ['schedule', `Scheduled ${scheduled.length}`],
+          ['pending', `Pending Settle ${pendingFollowups.length}`],
+        ].map(([id, label]) => (
+          <button key={id} className={operationsView === id ? 'active' : ''} onClick={() => setOperationsView(id)}>{label}</button>
+        ))}
+      </div>
+
+      {operationsView === 'board' && (
+        <section className="ops-board">
+          <OpsColumn title="Promotion Booked" subtitle="Product TBC" count={promotion.length}>{promotion.map(bookingCard)}</OpsColumn>
+          <OpsColumn title="Installation TBC" subtitle="Product confirmed / reserved" count={tbc.length}>{tbc.map(bookingCard)}</OpsColumn>
+          <OpsColumn title="Estimated" subtitle="Approximate timing" count={estimated.length}>{estimated.map(bookingCard)}</OpsColumn>
+          <OpsColumn title="Scheduled" subtitle="Exact date" count={scheduled.length}>{scheduled.map(bookingCard)}</OpsColumn>
+        </section>
+      )}
+
+      {operationsView === 'calendar' && (
+        <OperationsCalendarV61
+          bookings={activeBookings}
+          followups={pendingFollowups}
+          jobs={jobs}
+          locations={calendarLocations}
+          locationById={locationById}
+          openEditBooking={openEditBooking}
+          openFollowup={openFollowup}
+          canManage={canManage}
+          currentRole={currentRole}
+          profile={profile}
+        />
+      )}
+
+      {operationsView === 'today' && (
+        <section className="ops-list">
+          {todayBookings.map(bookingCard)}
+          {todayFollowups.map((follow) => {
+            const job = jobs.find((item) => item.id === follow.job_id)
+            return <FollowupCardV6 key={follow.id} followup={follow} job={job} locationById={locationById} openFollowup={openFollowup} canManage={canManage} currentRole={currentRole} profile={profile} />
+          })}
+          {todayBookings.length + todayFollowups.length === 0 && <div className="surface-card"><EmptyState title="No jobs today" text="Scheduled installations and follow-up visits will appear here." /></div>}
+        </section>
+      )}
+
+      {operationsView === 'schedule' && (
+        <section className="ops-list">
+          {[...scheduled].sort((a,b) => `${a.installation_date}${a.installation_time || ''}`.localeCompare(`${b.installation_date}${b.installation_time || ''}`)).map(bookingCard)}
+          {scheduled.length === 0 && <div className="surface-card"><EmptyState title="No exact dates yet" text="Use Estimated or TBC until the customer confirms an installation date." /></div>}
+        </section>
+      )}
+
+      {operationsView === 'pending' && (
+        <section className="ops-list">
+          {pendingFollowups.map((follow) => {
+            const job = jobs.find((item) => item.id === follow.job_id)
+            return <FollowupCardV6 key={follow.id} followup={follow} job={job} locationById={locationById} openFollowup={openFollowup} canManage={canManage} currentRole={currentRole} profile={profile} />
+          })}
+          {pendingFollowups.length === 0 && <div className="surface-card"><EmptyState title="No pending settle" text="Great — no installation handover is waiting to be settled." /></div>}
+        </section>
+      )}
+    </div>
+  )
+}
+
+
+function OperationsCalendarV61({
+  bookings,
+  followups,
+  jobs,
+  locations,
+  locationById,
+  openEditBooking,
+  openFollowup,
+  canManage,
+  currentRole,
+  profile,
+}) {
+  const [calendarMode, setCalendarMode] = useState('month')
+  const [cursor, setCursor] = useState(() => new Date())
+  const [technicianFilter, setTechnicianFilter] = useState(() =>
+    currentRole === 'technician' ? profile?.location_id || '' : 'all'
+  )
+
+  useEffect(() => {
+    if (currentRole === 'technician') {
+      setTechnicianFilter(profile?.location_id || '')
+    }
+  }, [currentRole, profile?.location_id])
+
+  const technicianLocations = (locations || []).filter((location) =>
+    ['technician', 'sales_installer', 'partner'].includes(
+      location.location_type
+    )
+  )
+
+  const events = useMemo(() => {
+    const bookingEvents = bookings
+      .filter(
+        (booking) =>
+          booking.schedule_type === 'exact' &&
+          booking.installation_date
+      )
+      .map((booking) => ({
+        id: `booking-${booking.id}`,
+        type: 'installation',
+        date: booking.installation_date,
+        time: booking.installation_time
+          ? String(booking.installation_time).slice(0, 5)
+          : '',
+        title: booking.customer_name,
+        unit: booking.unit_no || '',
+        area:
+          booking.place_name ||
+          booking.installation_area ||
+          'Installation',
+        address: booking.installation_address || '',
+        technicianId: booking.installer_location_id || '',
+        record: booking,
+      }))
+
+    const followupEvents = followups
+      .filter((followup) => followup.scheduled_date)
+      .map((followup) => {
+        const job = jobs.find((item) => item.id === followup.job_id)
+        return {
+          id: `followup-${followup.id}`,
+          type: 'followup',
+          date: followup.scheduled_date,
+          time: followup.scheduled_time
+            ? String(followup.scheduled_time).slice(0, 5)
+            : '',
+          title: job?.customer_name || job?.job_no || 'Follow-up',
+          unit: job?.unit_no || '',
+          area:
+            job?.place_name ||
+            job?.installation_area ||
+            'Pending Settle',
+          address: job?.installation_address || '',
+          technicianId:
+            followup.technician_location_id ||
+            job?.technician_location_id ||
+            '',
+          record: followup,
+          job,
+        }
+      })
+
+    return [...bookingEvents, ...followupEvents]
+      .filter((event) => {
+        if (!technicianFilter || technicianFilter === 'all') return true
+        return event.technicianId === technicianFilter
+      })
+      .sort((a, b) =>
+        `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`)
+      )
+  }, [
+    bookings,
+    followups,
+    jobs,
+    technicianFilter,
+  ])
+
+  const unscheduled = bookings.filter((booking) => {
+    if (booking.schedule_type === 'exact') return false
+    if (
+      technicianFilter &&
+      technicianFilter !== 'all' &&
+      booking.installer_location_id !== technicianFilter
+    ) {
+      return false
+    }
+    return true
+  })
+
+  const title =
+    calendarMode === 'month'
+      ? cursor.toLocaleDateString('en-MY', {
+          month: 'long',
+          year: 'numeric',
+        })
+      : `${startOfWeekMonday(cursor).toLocaleDateString('en-MY', {
+          day: 'numeric',
+          month: 'short',
+        })} – ${addDays(startOfWeekMonday(cursor), 6).toLocaleDateString(
+          'en-MY',
+          {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }
+        )}`
+
+  function moveCalendar(direction) {
+    setCursor((current) => {
+      const next = new Date(current)
+      if (calendarMode === 'month') {
+        next.setMonth(next.getMonth() + direction)
+      } else {
+        next.setDate(next.getDate() + 7 * direction)
+      }
+      return next
+    })
+  }
+
+  function eventClick(event) {
+    if (!canManage) return
+
+    if (event.type === 'installation') {
+      openEditBooking(event.record)
+    } else {
+      openFollowup(event.record, 'schedule')
+    }
+  }
+
+  function eventMapUrl(event) {
+    return googleMapsUrl(
+      event.type === 'installation' ? event.record : event.job
+    )
+  }
+
+  return (
+    <section className="calendar-v61-wrap">
+      <div className="surface-card calendar-toolbar">
+        <div className="calendar-nav">
+          <button
+            className="icon-button"
+            onClick={() => moveCalendar(-1)}
+            title="Previous"
+          >
+            <ChevronLeft size={18} />
+          </button>
+          <div>
+            <p className="kicker">OPERATIONS CALENDAR</p>
+            <h3>{title}</h3>
+          </div>
+          <button
+            className="icon-button"
+            onClick={() => moveCalendar(1)}
+            title="Next"
+          >
+            <ChevronRight size={18} />
+          </button>
+          <button
+            className="secondary-button calendar-today-button"
+            onClick={() => setCursor(new Date())}
+          >
+            Today
+          </button>
+        </div>
+
+        <div className="calendar-controls">
+          <select
+            value={technicianFilter}
+            onChange={(e) => setTechnicianFilter(e.target.value)}
+            disabled={currentRole === 'technician'}
+          >
+            {currentRole !== 'technician' && (
+              <option value="all">All Technicians</option>
+            )}
+            {technicianLocations.map((location) => (
+              <option key={location.id} value={location.id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
+
+          <div className="calendar-mode-toggle">
+            <button
+              className={calendarMode === 'month' ? 'active' : ''}
+              onClick={() => setCalendarMode('month')}
+            >
+              Month
+            </button>
+            <button
+              className={calendarMode === 'week' ? 'active' : ''}
+              onClick={() => setCalendarMode('week')}
+            >
+              Week
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {calendarMode === 'month' ? (
+        <MonthCalendarV61
+          cursor={cursor}
+          events={events}
+          eventClick={eventClick}
+          eventMapUrl={eventMapUrl}
+          locationById={locationById}
+        />
+      ) : (
+        <WeekCalendarV61
+          cursor={cursor}
+          events={events}
+          eventClick={eventClick}
+          eventMapUrl={eventMapUrl}
+          locationById={locationById}
+        />
+      )}
+
+      <section className="calendar-unscheduled">
+        <div className="calendar-unscheduled-head">
+          <div>
+            <p className="kicker">NOT ON EXACT CALENDAR YET</p>
+            <h3>TBC & Estimated</h3>
+          </div>
+          <strong>{unscheduled.length}</strong>
+        </div>
+
+        <div className="calendar-unscheduled-grid">
+          {unscheduled.map((booking) => (
+            <button
+              key={booking.id}
+              className="unscheduled-card"
+              onClick={() => canManage && openEditBooking(booking)}
+            >
+              <span
+                className={`booking-chip ${
+                  booking.booking_type === 'promotion_only'
+                    ? 'promo'
+                    : booking.schedule_type
+                }`}
+              >
+                {booking.booking_type === 'promotion_only'
+                  ? 'PRODUCT TBC'
+                  : booking.schedule_type === 'estimated'
+                    ? 'ESTIMATED'
+                    : 'DATE TBC'}
+              </span>
+              <strong>{booking.customer_name}</strong>
+              <small>
+                {booking.unit_no ? `${booking.unit_no} • ` : ''}
+                {booking.place_name ||
+                  booking.installation_area ||
+                  'Site TBC'}
+              </small>
+              <p>
+                {booking.schedule_type === 'estimated'
+                  ? booking.estimated_installation
+                  : booking.remark || 'Waiting customer confirmation'}
+              </p>
+            </button>
+          ))}
+
+          {unscheduled.length === 0 && (
+            <div className="surface-card calendar-empty-card">
+              Everything in this filter has an exact date.
+            </div>
+          )}
+        </div>
+      </section>
+    </section>
+  )
+}
+
+function MonthCalendarV61({
+  cursor,
+  events,
+  eventClick,
+  eventMapUrl,
+  locationById,
+}) {
+  const year = cursor.getFullYear()
+  const month = cursor.getMonth()
+  const first = new Date(year, month, 1)
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const mondayOffset = (first.getDay() + 6) % 7
+  const cells = []
+
+  for (let index = 0; index < 42; index += 1) {
+    const dayNumber = index - mondayOffset + 1
+    const date = new Date(year, month, dayNumber)
+    const inMonth = dayNumber >= 1 && dayNumber <= daysInMonth
+    cells.push({
+      key: formatLocalDateKey(date),
+      date,
+      inMonth,
+    })
+  }
+
+  const todayKey = formatLocalDateKey(new Date())
+
+  return (
+    <div className="surface-card calendar-month-card">
+      <div className="calendar-weekday-head">
+        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(
+          (day) => (
+            <span key={day}>{day}</span>
+          )
+        )}
+      </div>
+
+      <div className="calendar-month-grid">
+        {cells.map((cell) => {
+          const dayEvents = events.filter(
+            (event) => event.date === cell.key
+          )
+
+          return (
+            <div
+              key={cell.key}
+              className={[
+                'calendar-day-cell',
+                !cell.inMonth ? 'outside' : '',
+                cell.key === todayKey ? 'today' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+            >
+              <div className="calendar-day-number">
+                <span>{cell.date.getDate()}</span>
+                {dayEvents.length > 0 && (
+                  <small>{dayEvents.length}</small>
+                )}
+              </div>
+
+              <div className="calendar-day-events">
+                {dayEvents.slice(0, 4).map((event) => (
+                  <CalendarEventV61
+                    key={event.id}
+                    event={event}
+                    eventClick={eventClick}
+                    mapUrl={eventMapUrl(event)}
+                    locationById={locationById}
+                  />
+                ))}
+                {dayEvents.length > 4 && (
+                  <small className="calendar-more">
+                    +{dayEvents.length - 4} more
+                  </small>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function WeekCalendarV61({
+  cursor,
+  events,
+  eventClick,
+  eventMapUrl,
+  locationById,
+}) {
+  const start = startOfWeekMonday(cursor)
+  const days = Array.from({ length: 7 }, (_, index) =>
+    addDays(start, index)
+  )
+  const todayKey = formatLocalDateKey(new Date())
+
+  return (
+    <div className="calendar-week-grid">
+      {days.map((day) => {
+        const key = formatLocalDateKey(day)
+        const dayEvents = events.filter((event) => event.date === key)
+
+        return (
+          <section
+            key={key}
+            className={
+              key === todayKey
+                ? 'surface-card calendar-week-day today'
+                : 'surface-card calendar-week-day'
+            }
+          >
+            <div className="calendar-week-day-head">
+              <span>
+                {day.toLocaleDateString('en-MY', {
+                  weekday: 'short',
+                })}
+              </span>
+              <strong>{day.getDate()}</strong>
+            </div>
+
+            <div className="calendar-week-day-body">
+              {dayEvents.map((event) => (
+                <CalendarEventV61
+                  key={event.id}
+                  event={event}
+                  eventClick={eventClick}
+                  mapUrl={eventMapUrl(event)}
+                  locationById={locationById}
+                  expanded
+                />
+              ))}
+
+              {dayEvents.length === 0 && (
+                <small className="calendar-no-event">No jobs</small>
+              )}
+            </div>
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+function CalendarEventV61({
+  event,
+  eventClick,
+  mapUrl,
+  locationById,
+  expanded = false,
+}) {
+  const tech = locationById(event.technicianId)
+
+  return (
+    <div
+      className={`calendar-event ${event.type} ${
+        expanded ? 'expanded' : ''
+      }`}
+    >
+      <button
+        className="calendar-event-main"
+        onClick={() => eventClick(event)}
+      >
+        <span>
+          {event.type === 'followup' ? '🔧 ' : ''}
+          {event.time || 'TBC'}
+        </span>
+        <strong>{event.title}</strong>
+        {(expanded || event.unit) && (
+          <small>
+            {event.unit ? `${event.unit} • ` : ''}
+            {event.area}
+          </small>
+        )}
+        {expanded && tech && <small>{tech.name}</small>}
+      </button>
+
+      {mapUrl && (
+        <a
+          className="calendar-event-map"
+          href={mapUrl}
+          target="_blank"
+          rel="noreferrer"
+          title="Open Google Maps"
+        >
+          <MapPin size={12} />
+        </a>
+      )}
+    </div>
+  )
+}
+
+function OpsColumn({ title, subtitle, count, children }) {
+  return (
+    <div className="ops-column">
+      <div className="ops-column-head"><div><h3>{title}</h3><span>{subtitle}</span></div><strong>{count}</strong></div>
+      <div className="ops-column-body">{children}{count === 0 && <div className="ops-empty">Nothing here</div>}</div>
+    </div>
+  )
+}
+
+function BookingCardV6({
+  booking, productById, productDisplayName, locationById, canManage, canCompleteJobs,
+  openEditBooking, openHandover, openCompleteInstallation, cancelReservation,
+}) {
+  const installer = locationById(booking.installer_location_id)
+  const productTbc = booking.booking_type === 'promotion_only'
+  const timing = booking.schedule_type === 'exact'
+    ? `${booking.installation_date || ''}${booking.installation_time ? ` • ${String(booking.installation_time).slice(0,5)}` : ''}`
+    : booking.schedule_type === 'estimated'
+      ? booking.estimated_installation || 'Estimated'
+      : 'TBC'
+
+  return (
+    <article className="ops-booking-card">
+      <div className="ops-booking-head">
+        <div>
+          <span className={`booking-chip ${productTbc ? 'promo' : booking.schedule_type}`}>
+            {productTbc
+              ? 'PROMO BOOKED'
+              : booking.schedule_type === 'exact'
+                ? 'SCHEDULED'
+                : booking.schedule_type === 'estimated'
+                  ? 'ESTIMATED'
+                  : 'DATE TBC'}
+          </span>
+          <h3>{booking.customer_name}</h3>
+          <p>
+            {booking.unit_no ? `${booking.unit_no} • ` : ''}
+            {booking.installation_area || booking.place_name || 'Area TBC'}
+          </p>
+        </div>
+        {Number(booking.deposit_amount || 0) > 0 && <div className="deposit-chip">Deposit RM{Number(booking.deposit_amount).toFixed(0)}</div>}
+      </div>
+
+      <div className="ops-booking-meta">
+        <div><CalendarDays size={14} /><span>{timing}</span></div>
+        <div><UserRound size={14} /><span>{installer?.name || 'Technician TBC'}</span></div>
+      </div>
+
+      {(booking.installation_address || booking.customer_phone) && (
+        <div className="site-address-block">
+          {booking.installation_address && (
+            <div className="site-address-copy">
+              <MapPin size={15} />
+              <div>
+                <strong>
+                  {booking.unit_no
+                    ? `${booking.unit_no} • ${
+                        booking.place_name ||
+                        booking.installation_area ||
+                        'Site'
+                      }`
+                    : booking.place_name ||
+                      booking.installation_area ||
+                      'Installation Site'}
+                </strong>
+                <span>{booking.installation_address}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="site-quick-links">
+            {googleMapsUrl(booking) && (
+              <a
+                href={googleMapsUrl(booking)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MapPin size={14} /> Maps
+              </a>
+            )}
+            {booking.customer_phone && (
+              <a href={`tel:${booking.customer_phone}`}>
+                <Phone size={14} /> Call
+              </a>
+            )}
+            {whatsappUrl(booking.customer_phone) && (
+              <a
+                href={whatsappUrl(booking.customer_phone)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle size={14} /> WhatsApp
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="ops-product-tags">
+        {productTbc ? <span className="tbc-product">Product TBC</span> : (booking.reservation_items || []).map((item) => <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>)}
+      </div>
+
+      {booking.selling_price != null && (
+        <div className="booking-money-row">
+          <span>Price <strong>RM{Number(booking.selling_price).toFixed(0)}</strong></span>
+          <span>Balance <strong>RM{Math.max(0, Number(booking.selling_price || 0) - Number(booking.deposit_amount || 0)).toFixed(0)}</strong></span>
+        </div>
+      )}
+
+      {booking.remark && <p className="ops-remark">{booking.remark}</p>}
+
+      <div className="ops-card-actions">
+        {canManage && <button className="secondary-button" onClick={() => openEditBooking(booking, productTbc)}>{productTbc ? 'Confirm Product' : 'Edit'}</button>}
+        {canManage && !productTbc && booking.installer_location_id && booking.handover_status !== 'handed_over' && <button className="secondary-button" onClick={() => openHandover(booking)}>Hand Over</button>}
+        {canCompleteJobs && !productTbc && <button className="primary-button" onClick={() => openCompleteInstallation(booking)}>Complete Install</button>}
+        {canManage && <button className="icon-button danger-small" title="Cancel booking" onClick={() => cancelReservation(booking)}><XCircle size={16} /></button>}
+      </div>
+    </article>
+  )
+}
+
+function FollowupCardV6({ followup, job, locationById, openFollowup, canManage, currentRole, profile }) {
+  const tech = locationById(followup.technician_location_id || job?.technician_location_id)
+  const canResolve = canManage || (currentRole === 'technician' && profile?.location_id === (followup.technician_location_id || job?.technician_location_id))
+  return (
+    <article className="followup-card">
+      <div className="followup-icon"><AlertTriangle size={18} /></div>
+      <div className="followup-main">
+        <div className="followup-title"><div><span>PENDING SETTLE</span><h3>{job?.customer_name || job?.job_no || 'Installation Job'}</h3></div><strong>{followup.status}</strong></div>
+        <p>{followup.issue}</p>
+        <div className="followup-meta"><span><UserRound size={13} /> {tech?.name || 'Technician TBC'}</span><span><CalendarDays size={13} /> {followup.scheduled_date || 'Follow-up TBC'} {followup.scheduled_time ? String(followup.scheduled_time).slice(0,5) : ''}</span></div>
+        {followup.remark && <small>{followup.remark}</small>}
+        <div className="followup-actions">
+          {canManage && <button className="secondary-button" onClick={() => openFollowup(followup, 'schedule')}>Schedule / Edit</button>}
+          {canResolve && <button className="primary-button" onClick={() => openFollowup(followup, 'resolve')}>Settle Done</button>}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function BookingV6Modal({ editor, form, items, products, locations, saving, error, updateForm, updateItem, addItem, removeItem, close, save }) {
+  const productConfirmed = form.booking_type === 'product_confirmed'
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal booking-v6-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="transaction-modal-head"><div><p className="kicker">{editor.type === 'new' ? 'NEW BOOKING' : 'EDIT BOOKING'}</p><h2>{editor.type === 'new' ? 'Create Booking' : 'Update Booking'}</h2><p>It is okay if product or installation date is still TBC.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
+        <div className="transaction-scroll">
+          <div className="transaction-two-col">
+            <div className="transaction-field"><label>Customer Name *</label><input value={form.customer_name} onChange={(e) => updateForm('customer_name', e.target.value)} /></div>
+            <div className="transaction-field"><label>Phone</label><input value={form.customer_phone} onChange={(e) => updateForm('customer_phone', e.target.value)} /></div>
+          </div>
+          <div className="transaction-two-col">
+            <div className="transaction-field">
+              <label>Unit / House No.</label>
+              <input
+                value={form.unit_no}
+                onChange={(e) => updateForm('unit_no', e.target.value)}
+                placeholder="e.g. A-18-07 / No. 22"
+              />
+            </div>
+            <div className="transaction-field">
+              <label>Area / Project</label>
+              <input
+                value={form.installation_area}
+                onChange={(e) =>
+                  updateForm('installation_area', e.target.value)
+                }
+                placeholder="Eco Botanic / One49 Residence"
+              />
+            </div>
+          </div>
+
+          <div className="transaction-field address-field">
+            <label>Google Place Search</label>
+            <GooglePlacesAddress
+              currentAddress={form.installation_address}
+              onPlaceSelected={(place) => {
+                updateForm(
+                  'installation_address',
+                  place.installation_address
+                )
+                updateForm('place_name', place.place_name)
+                updateForm('google_place_id', place.google_place_id)
+                updateForm('latitude', place.latitude)
+                updateForm('longitude', place.longitude)
+
+                if (!form.installation_area && place.place_name) {
+                  updateForm('installation_area', place.place_name)
+                }
+              }}
+            />
+          </div>
+
+          <div className="transaction-field">
+            <label>Installation Address</label>
+            <textarea
+              rows="2"
+              value={form.installation_address}
+              onChange={(e) => {
+                updateForm('installation_address', e.target.value)
+                // Manual edits mean the saved address may no longer be
+                // identical to the Google place selected.
+                updateForm('google_place_id', '')
+                updateForm('latitude', null)
+                updateForm('longitude', null)
+              }}
+              placeholder="Select from Google Places or type manually"
+            />
+          </div>
+
+          <div className="booking-type-switch">
+            <button className={form.booking_type === 'promotion_only' ? 'active' : ''} onClick={() => updateForm('booking_type', 'promotion_only')}><Star size={16} /><strong>Promotion Booking</strong><span>Product TBC • no stock reserved</span></button>
+            <button className={form.booking_type === 'product_confirmed' ? 'active' : ''} onClick={() => updateForm('booking_type', 'product_confirmed')}><PackageCheck size={16} /><strong>Product Confirmed</strong><span>Reserve selected stock</span></button>
+          </div>
+
+          <div className="transaction-two-col">
+            <div className="transaction-field"><label>Promotion / Deal</label><input value={form.promotion_name} onChange={(e) => updateForm('promotion_name', e.target.value)} placeholder="Sept Promo / Combo 2" /></div>
+            <div className="transaction-field"><label>Payment Status</label><select value={form.payment_status} onChange={(e) => updateForm('payment_status', e.target.value)}><option value="not_paid">Not Paid</option><option value="deposit_paid">Deposit Paid</option><option value="partial_paid">Partial Paid</option><option value="fully_paid">Fully Paid</option></select></div>
+          </div>
+          <div className="transaction-two-col">
+            <div className="transaction-field"><label>Selling Price (RM)</label><input type="number" min="0" value={form.selling_price} onChange={(e) => updateForm('selling_price', e.target.value)} /></div>
+            <div className="transaction-field"><label>Deposit (RM)</label><input type="number" min="0" value={form.deposit_amount} onChange={(e) => updateForm('deposit_amount', e.target.value)} /></div>
+          </div>
+
+          {productConfirmed && (
+            <div className="transaction-products"><div className="transaction-products-head"><div><p className="kicker">RESERVED PRODUCTS</p><h3>Smart Lock / Lock Body</h3></div><button type="button" className="add-line-button" onClick={addItem}><Plus size={15} /> Add item</button></div>
+              {items.map((item, index) => <div className="transaction-item" key={index}><div className="transaction-item-main"><select value={item.product_id} onChange={(e) => updateItem(index, 'product_id', e.target.value)}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>)}</select><div className="transaction-qty"><span>Qty</span><input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} /></div><button type="button" className="remove-line-button" onClick={() => removeItem(index)}><Trash2 size={16} /></button></div></div>)}
+            </div>
+          )}
+
+          <div className="transaction-field"><label>Installation Timing</label><div className="timing-options">{[['tbc','TBC'],['estimated','Estimated'],['exact','Exact Date']].map(([id,label]) => <button key={id} className={form.schedule_type === id ? 'active' : ''} onClick={() => updateForm('schedule_type', id)}>{label}</button>)}</div></div>
+          {form.schedule_type === 'estimated' && <div className="transaction-field"><label>Estimated Installation *</label><input value={form.estimated_installation} onChange={(e) => updateForm('estimated_installation', e.target.value)} placeholder="e.g. Dec '26 • house still renovating" /></div>}
+          {form.schedule_type === 'exact' && <div className="transaction-two-col"><div className="transaction-field"><label>Date *</label><input type="date" value={form.installation_date} onChange={(e) => updateForm('installation_date', e.target.value)} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.installation_time} onChange={(e) => updateForm('installation_time', e.target.value)} /></div></div>}
+          <div className="transaction-field"><label>Technician / Stock Holder</label><select value={form.installer_location_id} onChange={(e) => updateForm('installer_location_id', e.target.value)}><option value="">TBC / Not assigned</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+          <div className="transaction-field"><label>Remark</label><textarea rows="3" value={form.remark} onChange={(e) => updateForm('remark', e.target.value)} placeholder="Customer house still renovating, expected Dec '26..." /></div>
+          {error && <div className="transaction-error">{error}</div>}
+        </div>
+        <div className="transaction-footer"><button className="secondary-button" onClick={close} disabled={saving}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Booking'}</button></div>
+      </section>
+    </div>
+  )
+}
+
+function HandoverV6Modal({ booking, form, setForm, locations, saving, error, close, save }) {
+  return <div className="transaction-backdrop" onClick={close}><section className="mini-modal" onClick={(e) => e.stopPropagation()}><div className="mini-modal-head"><div><p className="kicker">STOCK PREPARATION</p><h2>Hand Over Stock</h2><p>{booking.customer_name} • move reserved items to technician</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div><div className="transaction-field"><label>From</label><select value={form.from_location_id} onChange={(e) => setForm((c) => ({...c, from_location_id:e.target.value}))}><option value="">Select source</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="transaction-field"><label>To Technician</label><select value={form.to_location_id} onChange={(e) => setForm((c) => ({...c, to_location_id:e.target.value}))}><option value="">Select technician</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>{error && <div className="transaction-error">{error}</div>}<div className="mini-modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Moving...' : 'Confirm Handover'}</button></div></section></div>
+}
+
+function CompleteInstallationV6Modal({ booking, form, setForm, files, setFiles, locations, saving, error, close, save }) {
+  return <div className="transaction-backdrop" onClick={close}><section className="transaction-modal completion-v6-modal" onClick={(e) => e.stopPropagation()}><div className="transaction-modal-head"><div><p className="kicker">TECHNICIAN UPDATE</p><h2>Complete Installation</h2><p>{booking.customer_name} • upload site photos and close / pending settle.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div><div className="transaction-scroll">
+    <div className="transaction-field"><label>Stock Holder / Technician *</label><select value={form.stock_location_id} onChange={(e) => setForm((c) => ({...c, stock_location_id:e.target.value}))}><option value="">Select</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+    <div className="completion-checks"><label><input type="checkbox" checked={form.customer_taught} onChange={(e) => setForm((c) => ({...c, customer_taught:e.target.checked}))} /><span><strong>Customer taught how to use lock</strong><small>Basic usage / app / charging explained</small></span></label><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked customer for review</strong><small>Google / Facebook review requested</small></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong><small>Customer already submitted review</small></span></label></div>
+    <div className="transaction-field"><label>Installation Photos</label><label className="photo-upload-box"><Upload size={22} /><strong>Choose Photos</strong><span>Front / inside / lock body / overall door</span><input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label>{files.length > 0 && <div className="selected-files">{files.map((f) => <span key={`${f.name}-${f.size}`}><ImageIcon size={13} /> {f.name}</span>)}</div>}</div>
+    <label className="pending-settle-switch"><input type="checkbox" checked={form.pending_settle} onChange={(e) => setForm((c) => ({...c, pending_settle:e.target.checked}))} /><div><strong>Pending Settle</strong><span>Something is not fully completed and we must return.</span></div></label>
+    {form.pending_settle && <div className="transaction-field"><label>What is still not settled? *</label><textarea rows="3" value={form.pending_issue} onChange={(e) => setForm((c) => ({...c, pending_issue:e.target.value}))} placeholder="e.g. Need return to adjust strike plate / replace lock body / Wi-Fi linking..." /></div>}
+    <div className="transaction-field"><label>Completion Remark</label><textarea rows="3" value={form.completion_remark} onChange={(e) => setForm((c) => ({...c, completion_remark:e.target.value}))} /></div>
+    {error && <div className="transaction-error">{error}</div>}
+  </div><div className="transaction-footer"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving & Uploading...' : form.pending_settle ? 'Complete • Pending Settle' : 'Complete Installation'}</button></div></section></div>
+}
+
+function FollowupV6Modal({ editor, form, setForm, locations, saving, error, close, save }) {
+  const resolve = editor.mode === 'resolve'
+  return <div className="transaction-backdrop" onClick={close}><section className="mini-modal followup-modal" onClick={(e) => e.stopPropagation()}><div className="mini-modal-head"><div><p className="kicker">PENDING SETTLE</p><h2>{resolve ? 'Settle Completed' : 'Schedule Follow-up'}</h2><p>{editor.job?.customer_name} • {editor.followup.issue}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>{resolve ? <><div className="transaction-field"><label>What was settled? *</label><textarea rows="3" value={form.resolution_note} onChange={(e) => setForm((c) => ({...c, resolution_note:e.target.value}))} /></div><div className="completion-checks compact"><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked for review</strong></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong></span></label></div></> : <><div className="transaction-field"><label>Technician</label><select value={form.technician_location_id} onChange={(e) => setForm((c) => ({...c, technician_location_id:e.target.value}))}><option value="">TBC</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="transaction-two-col"><div className="transaction-field"><label>Date</label><input type="date" value={form.scheduled_date} onChange={(e) => setForm((c) => ({...c, scheduled_date:e.target.value}))} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.scheduled_time} onChange={(e) => setForm((c) => ({...c, scheduled_time:e.target.value}))} /></div></div><div className="transaction-field"><label>Remark</label><textarea rows="2" value={form.remark} onChange={(e) => setForm((c) => ({...c, remark:e.target.value}))} /></div></>}{error && <div className="transaction-error">{error}</div>}<div className="mini-modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : resolve ? 'Mark Settled' : 'Save Follow-up'}</button></div></section></div>
+}
 
 function JobModal({
   jobModal,
@@ -3373,6 +4996,9 @@ function JobsPage({
   voidJob,
   deleteJobPermanently,
   isOwner,
+  jobPhotos = [],
+  followups = [],
+  openFollowup,
 }) {
   const filtered = jobs.filter((job) => {
     if (jobFilter === 'all') return true
@@ -3421,16 +5047,9 @@ function JobsPage({
           {['owner', 'admin'].includes(currentRole) && (
             <button
               className="secondary-button"
-              onClick={() => setActiveTab('reservations')}
+              onClick={() => setActiveTab('operations')}
             >
               Reservations
-            </button>
-          )}
-
-          {canCompleteJobs && (
-            <button className="primary-button" onClick={openDirectJob}>
-              <Plus size={16} />
-              Complete Job
             </button>
           )}
         </div>
@@ -3509,6 +5128,50 @@ function JobsPage({
                 </div>
               </div>
 
+              {(job.installation_address || job.customer_phone) && (
+                <div className="site-address-block job-site-address">
+                  {job.installation_address && (
+                    <div className="site-address-copy">
+                      <MapPin size={15} />
+                      <div>
+                        <strong>
+                          {job.unit_no ? `${job.unit_no} • ` : ''}
+                          {job.place_name ||
+                            job.installation_area ||
+                            'Installation Site'}
+                        </strong>
+                        <span>{job.installation_address}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="site-quick-links">
+                    {googleMapsUrl(job) && (
+                      <a
+                        href={googleMapsUrl(job)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MapPin size={14} /> Maps
+                      </a>
+                    )}
+                    {job.customer_phone && (
+                      <a href={`tel:${job.customer_phone}`}>
+                        <Phone size={14} /> Call
+                      </a>
+                    )}
+                    {whatsappUrl(job.customer_phone) && (
+                      <a
+                        href={whatsappUrl(job.customer_phone)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MessageCircle size={14} /> WhatsApp
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <div className="job-products">
                 {(job.job_items || []).map((item) => (
                   <span key={item.product_id}>
@@ -3522,6 +5185,25 @@ function JobsPage({
                 <div className="void-reason">
                   <strong>Void reason</strong>
                   <span>{job.void_reason}</span>
+                </div>
+              )}
+
+              <div className="job-ops-status">
+                <span className={job.review_received ? 'review-badge received' : job.review_asked ? 'review-badge asked' : 'review-badge'}>
+                  <Star size={13} /> {job.review_received ? 'Review Received' : job.review_asked ? 'Review Asked' : 'Review Not Asked'}
+                </span>
+                {job.settlement_status === 'pending' && <span className="pending-badge"><AlertTriangle size={13} /> Pending Settle</span>}
+              </div>
+
+              {job.pending_issue && <div className="job-pending-note"><strong>Pending:</strong> {job.pending_issue}</div>}
+
+              {jobPhotos.filter((photo) => photo.job_id === job.id).length > 0 && (
+                <div className="job-photo-strip">
+                  {jobPhotos.filter((photo) => photo.job_id === job.id).slice(0, 5).map((photo) => (
+                    <a key={photo.id} href={photo.signed_url || '#'} target="_blank" rel="noreferrer">
+                      {photo.signed_url ? <img src={photo.signed_url} alt={photo.file_name || 'Installation'} /> : <Camera size={18} />}
+                    </a>
+                  ))}
                 </div>
               )}
 
@@ -3592,6 +5274,7 @@ function Dashboard({
   movements,
   reservations,
   jobs,
+  followups,
   productDisplayName,
   productById,
   movementTitle,
@@ -3673,13 +5356,13 @@ function Dashboard({
       <section className="operation-summary-grid">
         <button
           className="operation-summary-card"
-          onClick={() => setActiveTab('reservations')}
+          onClick={() => setActiveTab('operations')}
         >
           <div className="operation-summary-icon">
             <PackageCheck size={20} />
           </div>
           <div>
-            <span>Active Reservations</span>
+            <span>Active Bookings</span>
             <strong>
               {
                 reservations.filter(
@@ -3687,7 +5370,20 @@ function Dashboard({
                 ).length
               }
             </strong>
-            <small>Waiting for installation</small>
+            <small>Booked / reserved / scheduled</small>
+          </div>
+          <ChevronRight size={18} />
+        </button>
+
+        <button
+          className="operation-summary-card"
+          onClick={() => setActiveTab('operations')}
+        >
+          <div className="operation-summary-icon"><Star size={20} /></div>
+          <div>
+            <span>Promotion / Product TBC</span>
+            <strong>{reservations.filter((item) => item.status === 'reserved' && item.booking_type === 'promotion_only').length}</strong>
+            <small>Deposit booked, model not chosen</small>
           </div>
           <ChevronRight size={18} />
         </button>
@@ -3712,6 +5408,20 @@ function Dashboard({
           </div>
           <ChevronRight size={18} />
         </button>
+
+        <button
+          className="operation-summary-card"
+          onClick={() => setActiveTab('operations')}
+        >
+          <div className="operation-summary-icon"><AlertTriangle size={20} /></div>
+          <div>
+            <span>Pending Settle</span>
+            <strong>{followups.filter((item) => ['pending', 'scheduled'].includes(item.status)).length}</strong>
+            <small>Need return / follow-up</small>
+          </div>
+          <ChevronRight size={18} />
+        </button>
+
       </section>
 
       <div className="dashboard-grid">
@@ -3843,6 +5553,8 @@ function InventoryPage({
   categoryFilter,
   setCategoryFilter,
   productDisplayName,
+  canAddProduct,
+  openAddProduct,
 }) {
   return (
     <div className="page-stack fade-in">
@@ -3855,6 +5567,12 @@ function InventoryPage({
             immediately.
           </p>
         </div>
+
+        {canAddProduct && (
+          <button className="primary-button inventory-add-button" onClick={openAddProduct}>
+            <Plus size={16} /> Add Item
+          </button>
+        )}
 
         <div className="inventory-search">
           <Search size={18} />
@@ -4167,6 +5885,12 @@ function MorePage({
             <ChevronRight size={17} />
           </button>
         )}
+
+        <button onClick={() => setActiveTab('operations')}>
+          <div className="settings-icon"><CalendarDays size={19} /></div>
+          <div><strong>Operations</strong><span>Bookings, schedule, handover and pending settle</span></div>
+          <ChevronRight size={17} />
+        </button>
 
         <button onClick={() => setActiveTab('activity')}>
           <div className="settings-icon">
