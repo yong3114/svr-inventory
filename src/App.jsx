@@ -3641,7 +3641,7 @@ function OperationsPage({
   const todayBookings = scheduled.filter((item) => item.installation_date === localDate)
   const todayFollowups = pendingFollowups.filter((item) => item.scheduled_date === localDate)
 
-  const bookingCard = (booking, compact = false) => (
+  const bookingCard = (booking) => (
     <BookingCardV6
       key={booking.id}
       booking={booking}
@@ -3654,7 +3654,6 @@ function OperationsPage({
       openHandover={openHandover}
       openCompleteInstallation={openCompleteInstallation}
       cancelReservation={cancelReservation}
-      compact={compact}
     />
   )
 
@@ -3695,27 +3694,27 @@ function OperationsPage({
       {operationsView === 'board' && (
         <section className="ops-board">
           <OpsColumn
-            title="Promotion"
+            title="Promotion Booked"
             subtitle="Product TBC"
             count={promotion.length}
           >
-            {promotion.map((booking) => bookingCard(booking, true))}
+            {promotion.map(bookingCard)}
           </OpsColumn>
 
           <OpsColumn
-            title="Install TBC"
-            subtitle="Stock reserved"
+            title="Installation TBC"
+            subtitle="Product confirmed / reserved"
             count={tbc.length}
           >
-            {tbc.map((booking) => bookingCard(booking, true))}
+            {tbc.map(bookingCard)}
           </OpsColumn>
 
           <OpsColumn
             title="Estimated"
-            subtitle="Approx. timing"
+            subtitle="Approximate timing"
             count={estimated.length}
           >
-            {estimated.map((booking) => bookingCard(booking, true))}
+            {estimated.map(bookingCard)}
           </OpsColumn>
 
           <OpsColumn
@@ -3723,7 +3722,7 @@ function OperationsPage({
             subtitle="Exact date"
             count={scheduled.length}
           >
-            {scheduled.map((booking) => bookingCard(booking, true))}
+            {scheduled.map(bookingCard)}
           </OpsColumn>
         </section>
       )}
@@ -4282,7 +4281,6 @@ function BookingCardV6({
   openHandover,
   openCompleteInstallation,
   cancelReservation,
-  compact = false,
 }) {
   const installer = locationById(booking.installer_location_id)
   const productTbc = booking.booking_type === 'promotion_only'
@@ -4291,106 +4289,6 @@ function BookingCardV6({
     : booking.schedule_type === 'estimated'
       ? booking.estimated_installation || 'Estimated'
       : 'TBC'
-
-  if (compact) {
-    const products = productTbc
-      ? ['Product TBC']
-      : (booking.reservation_items || []).map(
-          (item) =>
-            `${item.quantity}× ${productDisplayName(
-              productById(item.product_id)
-            )}`
-        )
-
-    return (
-      <article className="ops-mini-card">
-        <button
-          className="ops-mini-main"
-          onClick={() => {
-            if (canManage) {
-              openEditBooking(booking, productTbc)
-            } else if (canCompleteJobs && !productTbc) {
-              openCompleteInstallation(booking)
-            }
-          }}
-        >
-          <div className="ops-mini-top">
-            <span
-              className={`booking-chip ${
-                productTbc ? 'promo' : booking.schedule_type
-              }`}
-            >
-              {productTbc
-                ? 'PROMO'
-                : booking.schedule_type === 'exact'
-                  ? 'SCHEDULED'
-                  : booking.schedule_type === 'estimated'
-                    ? 'EST.'
-                    : 'TBC'}
-            </span>
-
-            {Number(booking.deposit_amount || 0) > 0 && (
-              <span className="ops-mini-deposit">
-                RM{Number(booking.deposit_amount).toFixed(0)}
-              </span>
-            )}
-          </div>
-
-          <strong className="ops-mini-customer">
-            {booking.customer_name}
-          </strong>
-
-          <span className="ops-mini-site">
-            {booking.unit_no ? `${booking.unit_no} • ` : ''}
-            {booking.installation_area ||
-              booking.place_name ||
-              'Site TBC'}
-          </span>
-
-          <div className="ops-mini-info">
-            <span>
-              <CalendarDays size={12} />
-              {timing}
-            </span>
-            <span>
-              <UserRound size={12} />
-              {installer?.name || 'Tech TBC'}
-            </span>
-          </div>
-
-          <div className="ops-mini-products">
-            {products.slice(0, 2).map((label, index) => (
-              <span key={`${booking.id}-${index}`}>{label}</span>
-            ))}
-            {products.length > 2 && (
-              <span>+{products.length - 2}</span>
-            )}
-          </div>
-        </button>
-
-        <div className="ops-mini-actions">
-          {canManage && (
-            <button
-              className="ops-mini-open"
-              onClick={() => openEditBooking(booking, productTbc)}
-            >
-              {productTbc ? 'Confirm' : 'Open'}
-            </button>
-          )}
-
-          {canCompleteJobs && !productTbc && (
-            <button
-              className="ops-mini-complete"
-              onClick={() => openCompleteInstallation(booking)}
-              title="Complete installation"
-            >
-              <Check size={14} />
-            </button>
-          )}
-        </div>
-      </article>
-    )
-  }
 
   return (
     <article className="ops-booking-card">

@@ -6786,3 +6786,339 @@ body {
     grid-template-columns: 29px 32px 29px !important;
   }
 }
+
+
+/* =========================================================
+   V6.2.3f — Restore mobile Operations Board to horizontal
+   slide / Kanban layout.
+   This overrides the earlier 2 x 2 compact-board CSS.
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .ops-board {
+    margin: 0 !important;
+    padding: 2px 12px 10px 0 !important;
+    display: grid !important;
+    grid-auto-flow: column !important;
+    grid-auto-columns: min(84vw, 330px) !important;
+    grid-template-columns: none !important;
+    gap: 10px !important;
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    scroll-snap-type: x mandatory !important;
+    scroll-padding-left: 0 !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .ops-board::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ops-column {
+    width: auto !important;
+    min-width: 0 !important;
+    padding: 10px !important;
+    border-radius: 14px !important;
+    background: #f3f4f5 !important;
+    scroll-snap-align: start !important;
+  }
+
+  .ops-column-head {
+    min-height: 48px !important;
+    padding: 4px 4px 9px !important;
+    gap: 7px !important;
+  }
+
+  .ops-column-head h3 {
+    font-size: 12px !important;
+    line-height: 1.2 !important;
+  }
+
+  .ops-column-head span {
+    display: block !important;
+    margin-top: 2px !important;
+    font-size: 8px !important;
+    line-height: 1.25 !important;
+  }
+
+  .ops-column-head strong {
+    width: 27px !important;
+    height: 27px !important;
+    border-radius: 9px !important;
+    font-size: 10px !important;
+  }
+
+  .ops-column-body {
+    display: grid !important;
+    gap: 8px !important;
+  }
+
+  .ops-empty {
+    min-height: 110px !important;
+    padding: 28px 10px !important;
+    display: grid !important;
+    place-items: center !important;
+    font-size: 9px !important;
+  }
+
+  /* Full Booking cards inside the slide board */
+  .ops-board .ops-booking-card {
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 14px !important;
+    border-radius: 13px !important;
+  }
+
+  .ops-board .ops-booking-head h3 {
+    font-size: 15px !important;
+  }
+
+  .ops-board .ops-booking-head p {
+    font-size: 9.5px !important;
+  }
+
+  .ops-board .ops-booking-meta > div {
+    font-size: 9px !important;
+  }
+
+  .ops-board .ops-product-tags span {
+    font-size: 9px !important;
+  }
+
+  .ops-board .site-quick-links a {
+    min-height: 38px !important;
+    font-size: 10px !important;
+  }
+
+  .ops-board .ops-card-actions .secondary-button,
+  .ops-board .ops-card-actions .primary-button {
+    min-height: 39px !important;
+    font-size: 10px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .ops-board {
+    grid-auto-columns: 86vw !important;
+  }
+}
+
+
+/* =========================================================
+   V6.2.4 — MOBILE STOCK + OPERATIONS CLEANUP
+   Remove intro-heavy blocks on phone and prioritize actual work.
+   ========================================================= */
+
+@media (max-width: 720px) {
+  /* -------------------------------------------------------
+     STOCK / INVENTORY
+     Mobile order:
+     1. All / Smart Locks / Lock Bodies
+     2. Small Add button (Owner/Admin)
+     3. Search
+     4. Inventory list
+     ------------------------------------------------------- */
+
+  .inventory-toolbar-card {
+    padding: 0 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 9px 8px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .inventory-toolbar-card .toolbar-copy {
+    display: none !important;
+  }
+
+  .inventory-toolbar-card .filter-pills {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    gap: 6px !important;
+  }
+
+  .inventory-toolbar-card .filter-pills button {
+    min-height: 35px !important;
+    padding: 0 11px !important;
+    font-size: 9px !important;
+  }
+
+  .inventory-toolbar-card .inventory-add-button {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    width: auto !important;
+    min-width: 68px !important;
+    min-height: 35px !important;
+    padding: 0 10px !important;
+    gap: 5px !important;
+    border-radius: 11px !important;
+    font-size: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  .inventory-toolbar-card .inventory-add-button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .inventory-toolbar-card .inventory-add-button::after {
+    content: 'Add';
+    font-size: 9px;
+    font-weight: 800;
+  }
+
+  .inventory-toolbar-card .inventory-search {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    height: 43px !important;
+    margin: 0 !important;
+    padding: 0 12px !important;
+    border-radius: 12px !important;
+    background: #fff !important;
+  }
+
+  .inventory-toolbar-card .inventory-search svg {
+    width: 16px !important;
+    height: 16px !important;
+  }
+
+  .inventory-toolbar-card .inventory-search input {
+    font-size: 13px !important;
+  }
+
+  .inventory-grid {
+    gap: 8px !important;
+  }
+
+  .inventory-card {
+    padding: 12px 13px !important;
+    border-radius: 13px !important;
+  }
+
+  .inventory-card-top {
+    align-items: center !important;
+  }
+
+  .inventory-card h3 {
+    margin-top: 2px !important;
+    font-size: 13.5px !important;
+    line-height: 1.2 !important;
+  }
+
+  .category-label {
+    font-size: 7.5px !important;
+    letter-spacing: .8px !important;
+  }
+
+  .available-chip {
+    min-width: 55px !important;
+    padding: 7px 8px !important;
+    border-radius: 11px !important;
+  }
+
+  .available-chip span {
+    font-size: 7.5px !important;
+  }
+
+  .available-chip strong {
+    margin-top: 1px !important;
+    font-size: 19px !important;
+  }
+
+  .inventory-stat-row {
+    margin-top: 10px !important;
+    padding-top: 10px !important;
+  }
+
+  .inventory-stat-row span {
+    font-size: 8px !important;
+  }
+
+  .inventory-stat-row strong {
+    margin-top: 2px !important;
+    font-size: 13px !important;
+  }
+
+  /* -------------------------------------------------------
+     OPERATIONS
+     Remove the large intro card on phone.
+     Keep New Booking as a compact top action.
+     ------------------------------------------------------- */
+
+  .operations-intro {
+    padding: 0 !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .operations-intro > div:first-child {
+    display: none !important;
+  }
+
+  .operations-intro .primary-button {
+    min-height: 36px !important;
+    padding: 0 11px !important;
+    font-size: 9.5px !important;
+    border-radius: 11px !important;
+  }
+
+  .operations-intro .primary-button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  /* Pull the useful Operations content upward. */
+  .operations-intro + .ops-kpi-grid {
+    margin-top: -2px !important;
+  }
+
+  .ops-kpi-grid {
+    gap: 6px !important;
+  }
+
+  .ops-kpi-grid > div {
+    min-height: 67px !important;
+    padding: 8px !important;
+    border-radius: 11px !important;
+  }
+
+  .ops-kpi-grid span {
+    font-size: 7px !important;
+    line-height: 1.18 !important;
+  }
+
+  .ops-kpi-grid strong {
+    font-size: 19px !important;
+  }
+
+  .status-tabs.operations-tabs {
+    margin-top: -1px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .inventory-toolbar-card .filter-pills button {
+    padding: 0 9px !important;
+    font-size: 8.5px !important;
+  }
+
+  .inventory-toolbar-card .inventory-add-button {
+    min-width: 60px !important;
+    padding: 0 8px !important;
+  }
+
+  .inventory-toolbar-card .inventory-add-button::after {
+    font-size: 8.5px;
+  }
+}
