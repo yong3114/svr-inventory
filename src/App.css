@@ -1,7 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap');
-
 :root {
-  font-family: 'DM Sans', Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #181a1d;
   background: #f4f5f6;
   font-synthesis: none;
@@ -3863,5 +3861,2928 @@ body {
   .site-quick-links a {
     flex: 1;
     justify-content: center;
+  }
+}
+
+
+/* =========================================================
+   V6.2 — UI / UX COMFORT PASS
+   Larger type • bigger touch targets • faster mobile paint
+   cleaner hierarchy • friendlier forms • easier operations
+   ========================================================= */
+
+:root {
+  font-size: 16px;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+button,
+.primary-button,
+.secondary-button,
+.icon-button,
+.sheet-action,
+.mobile-nav > button,
+.status-tabs button {
+  transition:
+    transform .12s ease,
+    background-color .12s ease,
+    border-color .12s ease,
+    opacity .12s ease;
+}
+
+button:active:not(:disabled),
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.sheet-action:active:not(:disabled) {
+  transform: scale(.985);
+}
+
+/* ---------- Global reading comfort ---------- */
+
+.kicker {
+  font-size: 11px;
+  letter-spacing: 1.25px;
+}
+
+.app-header h1 {
+  font-size: 24px;
+  letter-spacing: -.6px;
+}
+
+.page-intro h2,
+.toolbar-copy h2 {
+  font-size: 29px;
+  line-height: 1.12;
+}
+
+.page-intro p:last-child,
+.toolbar-copy p,
+.section-head p {
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.section-head h3 {
+  font-size: 19px;
+}
+
+.text-link {
+  min-height: 38px;
+  font-size: 12px;
+}
+
+.surface-card {
+  border-color: #e1e4e7;
+}
+
+/* ---------- Buttons ---------- */
+
+.primary-button,
+.secondary-button {
+  min-height: 46px;
+  padding: 0 17px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.icon-button {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 auto;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: .45;
+}
+
+/* ---------- Dashboard ---------- */
+
+.hero-card h2 {
+  font-size: clamp(34px, 4vw, 48px);
+  line-height: 1.03;
+}
+
+.hero-card > div:first-child > p:last-child {
+  font-size: 14px;
+}
+
+.metric-card span {
+  font-size: 12px;
+}
+
+.metric-card strong {
+  font-size: 35px;
+}
+
+.metric-card small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.compact-row {
+  min-height: 70px;
+}
+
+.compact-copy strong {
+  font-size: 13px;
+}
+
+.compact-copy span,
+.compact-number span {
+  font-size: 11px;
+}
+
+.compact-number strong {
+  font-size: 18px;
+}
+
+/* ---------- Inventory ---------- */
+
+.inventory-card h3 {
+  font-size: 17px;
+}
+
+.category-label {
+  font-size: 10px;
+}
+
+.available-chip span,
+.inventory-stat-row span {
+  font-size: 10px;
+}
+
+.available-chip strong {
+  font-size: 22px;
+}
+
+.inventory-stat-row strong {
+  font-size: 16px;
+}
+
+.inventory-search input,
+.inventory-toolbar-card input {
+  min-height: 48px;
+  font-size: 14px;
+}
+
+.filter-pills button {
+  min-height: 38px;
+  font-size: 11px;
+}
+
+/* ---------- Holders / Activity / More ---------- */
+
+.holder-copy span,
+.holder-stats span {
+  font-size: 10px;
+}
+
+.holder-copy h3 {
+  font-size: 16px;
+}
+
+.holder-button {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.activity-row {
+  min-height: 68px;
+}
+
+.activity-copy strong {
+  font-size: 13px;
+}
+
+.activity-copy span {
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.activity-row time {
+  font-size: 10px;
+}
+
+.settings-list button {
+  min-height: 70px;
+}
+
+.settings-list button strong {
+  font-size: 13px;
+}
+
+.settings-list button span {
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+/* ---------- Status / chips ---------- */
+
+.status-tabs {
+  gap: 9px;
+}
+
+.status-tabs button {
+  min-height: 42px;
+  padding: 0 15px;
+  font-size: 11px;
+}
+
+.status-badge,
+.invoice-state,
+.booking-chip,
+.review-badge,
+.pending-badge,
+.deposit-chip {
+  font-size: 9px;
+}
+
+/* ---------- Jobs / Reservations ---------- */
+
+.reservation-card,
+.job-card {
+  padding: 20px;
+}
+
+.reservation-card-head h3,
+.job-no h3 {
+  font-size: 17px;
+}
+
+.reservation-card-head p {
+  font-size: 11px;
+}
+
+.reservation-meta > div {
+  font-size: 11px;
+}
+
+.reservation-products-readable span,
+.job-products span {
+  padding: 7px 9px;
+  font-size: 10px;
+}
+
+.job-no span,
+.job-details-grid span,
+.job-card-actions small,
+.record-date {
+  font-size: 9px;
+}
+
+.job-details-grid strong {
+  font-size: 11px;
+}
+
+/* ---------- Forms & modals ---------- */
+
+.transaction-modal {
+  max-height: min(900px, calc(100dvh - 34px));
+}
+
+.transaction-modal-head h2 {
+  font-size: 25px;
+}
+
+.transaction-modal-head > div > p:last-child {
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.transaction-field {
+  margin-bottom: 17px;
+}
+
+.transaction-field label {
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.transaction-field input,
+.transaction-field select,
+.transaction-field textarea {
+  min-height: 50px;
+  padding-left: 13px;
+  padding-right: 13px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.transaction-field textarea {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  line-height: 1.5;
+}
+
+.field-help,
+.stock-hint,
+.google-place-control small {
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.transaction-products {
+  padding: 17px;
+}
+
+.transaction-products-head h3 {
+  font-size: 16px;
+}
+
+.add-line-button {
+  min-height: 40px;
+  font-size: 11px;
+}
+
+.transaction-item select {
+  height: 48px;
+  font-size: 13px;
+}
+
+.transaction-qty span {
+  font-size: 10px;
+}
+
+.transaction-qty input {
+  height: 48px;
+  font-size: 14px;
+}
+
+.remove-line-button {
+  width: 42px;
+  height: 48px;
+}
+
+.transaction-error {
+  padding: 12px 13px;
+  font-size: 11px;
+}
+
+.transaction-footer {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+
+.mini-modal-head h2 {
+  font-size: 22px;
+}
+
+.mini-modal-head p:last-child {
+  font-size: 11px;
+}
+
+/* ---------- Quick action sheet ---------- */
+
+.action-sheet {
+  padding-left: 18px;
+  padding-right: 18px;
+}
+
+.sheet-title h3 {
+  font-size: 19px;
+}
+
+.sheet-action {
+  min-height: 78px;
+}
+
+.action-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.sheet-action strong {
+  font-size: 14px;
+}
+
+.sheet-action span {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.sheet-note {
+  font-size: 11px;
+}
+
+/* ---------- Operations: easier to scan ---------- */
+
+.ops-kpi-grid > div {
+  min-height: 104px;
+  padding: 17px;
+}
+
+.ops-kpi-grid span {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.ops-kpi-grid strong {
+  font-size: 31px;
+}
+
+.ops-kpi-grid small {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ops-column {
+  padding: 11px;
+}
+
+.ops-column-head h3 {
+  font-size: 15px;
+}
+
+.ops-column-head span {
+  font-size: 10px;
+}
+
+.ops-column-head strong {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+}
+
+.ops-empty {
+  font-size: 11px;
+}
+
+.ops-booking-card {
+  padding: 16px;
+}
+
+.ops-booking-head h3 {
+  font-size: 16px;
+}
+
+.ops-booking-head p {
+  font-size: 11px;
+}
+
+.booking-chip {
+  padding: 5px 8px;
+  font-size: 9px;
+}
+
+.deposit-chip {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.ops-booking-meta > div {
+  font-size: 11px;
+}
+
+.ops-product-tags span {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.ops-remark {
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ops-card-actions {
+  gap: 7px;
+}
+
+.ops-card-actions .secondary-button,
+.ops-card-actions .primary-button {
+  min-height: 40px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.booking-type-switch button {
+  min-height: 68px;
+  padding: 14px;
+}
+
+.booking-type-switch button strong {
+  font-size: 13px;
+}
+
+.booking-type-switch button span {
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.timing-options button {
+  min-height: 44px;
+  font-size: 11px;
+}
+
+.completion-checks label {
+  min-height: 60px;
+  padding: 13px;
+}
+
+.completion-checks strong {
+  font-size: 12px;
+}
+
+.completion-checks small {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.photo-upload-box {
+  min-height: 112px;
+}
+
+.photo-upload-box strong {
+  font-size: 13px;
+}
+
+.photo-upload-box span {
+  font-size: 10px;
+}
+
+.selected-files span {
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.pending-settle-switch {
+  padding: 14px;
+}
+
+.pending-settle-switch strong {
+  font-size: 12px;
+}
+
+.pending-settle-switch span {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.followup-title span,
+.followup-title > strong {
+  font-size: 9px;
+}
+
+.followup-title h3 {
+  font-size: 16px;
+}
+
+.followup-main > p {
+  font-size: 12px;
+}
+
+.followup-meta {
+  font-size: 10px;
+}
+
+/* ---------- Address / Google Maps ---------- */
+
+.address-field {
+  padding: 15px;
+}
+
+.site-address-copy strong {
+  font-size: 12px;
+}
+
+.site-address-copy span {
+  font-size: 10px;
+}
+
+.site-quick-links a {
+  min-height: 38px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+/* ---------- Calendar ---------- */
+
+.calendar-nav h3 {
+  font-size: 18px;
+}
+
+.calendar-controls select {
+  height: 42px;
+  font-size: 11px;
+}
+
+.calendar-mode-toggle button {
+  min-height: 35px;
+  font-size: 10px;
+}
+
+.calendar-weekday-head span {
+  font-size: 10px;
+}
+
+.calendar-day-number > span {
+  font-size: 11px;
+}
+
+.calendar-day-number small {
+  font-size: 9px;
+}
+
+.calendar-event-main > span,
+.calendar-event-main small {
+  font-size: 9px;
+}
+
+.calendar-event-main strong {
+  font-size: 10px;
+}
+
+.calendar-week-day-head span {
+  font-size: 10px;
+}
+
+.calendar-week-day-body .calendar-event.expanded .calendar-event-main strong {
+  font-size: 12px;
+}
+
+.calendar-week-day-body .calendar-event.expanded .calendar-event-main small {
+  font-size: 10px;
+}
+
+.calendar-no-event,
+.calendar-more {
+  font-size: 9px;
+}
+
+.calendar-unscheduled-head h3 {
+  font-size: 18px;
+}
+
+.unscheduled-card > strong {
+  font-size: 13px;
+}
+
+.unscheduled-card > small,
+.unscheduled-card > p {
+  font-size: 10px;
+}
+
+/* ---------- Stock Count ---------- */
+
+.count-location label {
+  font-size: 13px;
+}
+
+.count-location select {
+  min-height: 50px;
+  font-size: 14px;
+}
+
+.count-row {
+  min-height: 74px;
+}
+
+.count-row-copy > span,
+.count-row-copy small {
+  font-size: 10px;
+}
+
+.count-row-copy strong {
+  font-size: 14px;
+}
+
+.count-input {
+  min-height: 46px;
+  font-size: 15px;
+}
+
+/* =========================================================
+   TABLET / PHONE
+   ========================================================= */
+
+@media (max-width: 900px) {
+  /* Backdrop blur is nice on desktop but costs paint time on phones. */
+  .app-header,
+  .mobile-nav,
+  .sheet-backdrop,
+  .transaction-backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .app-header {
+    height: 72px;
+    padding: 0 16px;
+    background: rgba(246, 247, 248, .98);
+  }
+
+  .app-header h1 {
+    font-size: 22px;
+  }
+
+  .page-content,
+  .count-page-content {
+    width: calc(100% - 24px);
+    padding-top: 16px;
+    padding-bottom: 112px;
+  }
+
+  .mobile-nav {
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: min(540px, calc(100% - 18px));
+    height: 76px;
+    padding: 8px;
+    grid-template-columns: 1fr 1fr 64px 1fr 1fr;
+    border-radius: 22px;
+    background: rgba(255,255,255,.99);
+  }
+
+  .mobile-nav > button {
+    min-width: 0;
+    height: 56px;
+    border-radius: 14px;
+    gap: 4px;
+  }
+
+  .mobile-nav > button span {
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .mobile-nav > button.active:not(.mobile-add) {
+    background: #f0f1f2;
+    color: #111214;
+  }
+
+  .mobile-nav .mobile-add {
+    width: 56px;
+    height: 56px;
+    border-radius: 17px;
+  }
+
+  .mobile-nav .mobile-add span {
+    font-size: 28px;
+  }
+
+  .status-tabs.operations-tabs {
+    position: sticky;
+    top: 72px;
+    z-index: 28;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 9px 12px;
+    background: rgba(244,245,246,.98);
+    border-bottom: 1px solid rgba(225,227,230,.9);
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    font-size: 16px;
+  }
+
+  .page-stack {
+    gap: 14px;
+  }
+
+  .surface-card {
+    padding: 18px;
+    border-radius: 17px;
+  }
+
+  .page-intro h2,
+  .toolbar-copy h2 {
+    font-size: 25px;
+  }
+
+  .page-intro p:last-child,
+  .toolbar-copy p {
+    font-size: 13px;
+  }
+
+  .hero-card {
+    min-height: 200px;
+    padding: 22px 19px;
+    border-radius: 19px;
+    box-shadow: 0 10px 30px rgba(17,18,20,.10);
+  }
+
+  .hero-card h2 {
+    font-size: 30px;
+  }
+
+  .hero-card > div:first-child > p:last-child {
+    font-size: 13px;
+  }
+
+  .metric-card {
+    min-height: 132px;
+    padding: 15px;
+  }
+
+  .metric-card span {
+    font-size: 11px;
+  }
+
+  .metric-card strong {
+    font-size: 30px;
+  }
+
+  .metric-card small {
+    font-size: 10px;
+  }
+
+  .operation-summary-card span {
+    font-size: 11px;
+  }
+
+  .operation-summary-card strong {
+    font-size: 27px;
+  }
+
+  .section-head h3 {
+    font-size: 19px;
+  }
+
+  .compact-copy strong,
+  .activity-copy strong {
+    font-size: 13px;
+  }
+
+  .compact-copy span,
+  .compact-number span,
+  .activity-copy span {
+    font-size: 11px;
+  }
+
+  .inventory-card {
+    padding: 18px;
+  }
+
+  .inventory-card h3,
+  .holder-copy h3 {
+    font-size: 17px;
+  }
+
+  .inventory-stat-row span,
+  .holder-copy span,
+  .holder-stats span {
+    font-size: 10px;
+  }
+
+  /* iOS/Android forms: 16px avoids accidental browser zoom. */
+  .transaction-field input,
+  .transaction-field select,
+  .transaction-field textarea,
+  .transaction-item select,
+  .transaction-qty input,
+  .calendar-controls select,
+  .count-location select {
+    font-size: 16px;
+  }
+
+  .transaction-backdrop {
+    place-items: end center;
+  }
+
+  .transaction-modal {
+    max-height: 96dvh;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .transaction-modal-head {
+    padding: 18px 17px 15px;
+  }
+
+  .transaction-modal-head h2 {
+    font-size: 23px;
+  }
+
+  .transaction-modal-head > div > p:last-child {
+    font-size: 12px;
+  }
+
+  .transaction-scroll {
+    padding: 17px 17px 26px;
+    scrollbar-width: thin;
+  }
+
+  .transaction-field label {
+    font-size: 13px;
+  }
+
+  .transaction-field input,
+  .transaction-field select {
+    min-height: 52px;
+  }
+
+  .transaction-field textarea {
+    min-height: 86px;
+  }
+
+  .transaction-products {
+    margin-left: -2px;
+    margin-right: -2px;
+    padding: 13px 10px;
+  }
+
+  .transaction-item-main {
+    grid-template-columns: minmax(0, 1fr) 68px 42px;
+  }
+
+  .transaction-item select,
+  .transaction-qty input,
+  .remove-line-button {
+    height: 50px;
+  }
+
+  .transaction-footer {
+    position: sticky;
+    bottom: 0;
+    padding: 11px 16px calc(11px + env(safe-area-inset-bottom));
+    grid-template-columns: 96px 1fr;
+    background: rgba(255,255,255,.99);
+  }
+
+  .transaction-footer .primary-button,
+  .transaction-footer .secondary-button {
+    min-height: 50px;
+    font-size: 14px;
+  }
+
+  .action-sheet {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .sheet-action {
+    min-height: 82px;
+  }
+
+  .sheet-action strong {
+    font-size: 14px;
+  }
+
+  .sheet-action span {
+    font-size: 11px;
+  }
+
+  .ops-kpi-grid {
+    gap: 8px;
+  }
+
+  .ops-kpi-grid > div {
+    min-height: 106px;
+    padding: 14px;
+  }
+
+  .ops-kpi-grid span {
+    font-size: 11px;
+  }
+
+  .ops-kpi-grid strong {
+    font-size: 28px;
+  }
+
+  .ops-kpi-grid small {
+    font-size: 10px;
+  }
+
+  .ops-booking-card {
+    padding: 16px;
+  }
+
+  .ops-booking-head h3 {
+    font-size: 17px;
+  }
+
+  .ops-booking-head p,
+  .ops-booking-meta > div,
+  .ops-remark {
+    font-size: 11px;
+  }
+
+  .ops-product-tags span {
+    font-size: 10px;
+  }
+
+  .ops-card-actions .secondary-button,
+  .ops-card-actions .primary-button {
+    min-height: 42px;
+    font-size: 12px;
+  }
+
+  .timing-options {
+    gap: 8px;
+  }
+
+  .timing-options button {
+    min-height: 48px;
+    font-size: 12px;
+  }
+
+  .completion-checks label {
+    min-height: 64px;
+  }
+
+  .completion-checks strong {
+    font-size: 13px;
+  }
+
+  .completion-checks small {
+    font-size: 10px;
+  }
+
+  .site-address-copy strong {
+    font-size: 13px;
+  }
+
+  .site-address-copy span {
+    font-size: 11px;
+  }
+
+  .site-quick-links a {
+    min-height: 42px;
+    font-size: 12px;
+  }
+
+  .calendar-toolbar {
+    padding: 14px;
+  }
+
+  .calendar-nav h3 {
+    font-size: 18px;
+  }
+
+  .calendar-controls select {
+    min-height: 46px;
+  }
+
+  .calendar-mode-toggle button {
+    min-height: 40px;
+    font-size: 11px;
+  }
+
+  /* Week is the phone default in App.jsx; make its cards easy to tap. */
+  .calendar-week-grid {
+    grid-template-columns: repeat(7, minmax(225px, 1fr));
+    gap: 10px;
+    scroll-snap-type: x proximity;
+  }
+
+  .calendar-week-day {
+    min-width: 225px;
+    padding: 14px;
+    scroll-snap-align: start;
+  }
+
+  .calendar-week-day-head span {
+    font-size: 11px;
+  }
+
+  .calendar-event.expanded .calendar-event-main {
+    padding: 10px;
+  }
+
+  .calendar-event.expanded .calendar-event-main > span {
+    font-size: 10px;
+  }
+
+  .calendar-event.expanded .calendar-event-main strong {
+    font-size: 13px;
+  }
+
+  .calendar-event.expanded .calendar-event-main small {
+    font-size: 11px;
+  }
+
+  .calendar-event-map {
+    width: 38px;
+  }
+
+  .calendar-unscheduled {
+    padding: 14px;
+  }
+
+  .unscheduled-card {
+    min-height: 132px;
+    padding: 13px;
+  }
+
+  .unscheduled-card > strong {
+    font-size: 14px;
+  }
+
+  .unscheduled-card > small,
+  .unscheduled-card > p {
+    font-size: 11px;
+  }
+
+  .followup-card {
+    gap: 11px;
+  }
+
+  .followup-title h3 {
+    font-size: 16px;
+  }
+
+  .followup-main > p {
+    font-size: 12px;
+  }
+
+  .followup-meta {
+    font-size: 10px;
+  }
+
+  .app-toast {
+    min-width: min(340px, calc(100% - 28px));
+    padding: 13px 16px;
+    font-size: 12px;
+  }
+}
+
+/* Small phone: preserve readability instead of shrinking text. */
+@media (max-width: 430px) {
+  .page-content,
+  .count-page-content {
+    width: calc(100% - 20px);
+  }
+
+  .metric-grid,
+  .operation-summary-grid,
+  .ops-kpi-grid {
+    gap: 7px;
+  }
+
+  .metric-card {
+    min-height: 128px;
+    padding: 13px;
+  }
+
+  .metric-card strong {
+    font-size: 28px;
+  }
+
+  .metric-card span {
+    font-size: 10px;
+  }
+
+  .ops-kpi-grid > div {
+    padding: 12px;
+  }
+
+  .ops-kpi-grid span {
+    font-size: 10px;
+  }
+
+  .ops-kpi-grid strong {
+    font-size: 26px;
+  }
+
+  .mobile-nav > button span {
+    font-size: 10px;
+  }
+}
+
+/* Accessibility / performance: respect reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+
+/* =========================================================
+   V6.2.1 — STOCK COUNT MOBILE FIX
+   ========================================================= */
+
+.stock-count-shell {
+  padding-bottom: 108px;
+}
+
+.count-row-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.qty-control {
+  width: 154px;
+  max-width: 154px;
+  grid-template-columns: 44px 56px 44px;
+  gap: 5px;
+}
+
+.qty-control button,
+.qty-control input {
+  min-width: 0;
+}
+
+.count-sticky {
+  box-sizing: border-box;
+}
+
+@media (max-width: 720px) {
+  .stock-count-shell {
+    gap: 11px;
+    padding-bottom: 124px;
+  }
+
+  .stock-count-heading {
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .stock-count-heading h2 {
+    font-size: 24px;
+  }
+
+  .stock-count-heading p:last-child {
+    max-width: 260px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .count-location {
+    padding: 14px;
+  }
+
+  .count-location > span {
+    font-size: 10px;
+  }
+
+  .count-filters {
+    display: flex;
+    gap: 7px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+
+  .count-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .count-filters button {
+    min-height: 38px;
+    padding: 0 12px;
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .count-list {
+    gap: 7px;
+  }
+
+  .count-row {
+    min-height: 88px;
+    padding: 13px 12px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+
+  .count-row-copy > span {
+    font-size: 9px;
+  }
+
+  .count-row-copy strong {
+    margin-top: 3px;
+    font-size: 14px;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .count-row-copy small {
+    margin-top: 5px;
+    font-size: 10px;
+  }
+
+  .qty-control {
+    width: 142px;
+    max-width: 142px;
+    grid-template-columns: 42px 48px 42px;
+    gap: 5px;
+  }
+
+  .qty-control button,
+  .qty-control input {
+    height: 46px;
+    border-radius: 12px;
+  }
+
+  .qty-control button {
+    font-size: 20px;
+  }
+
+  .qty-control input {
+    padding: 0 2px;
+    font-size: 16px;
+  }
+
+  .count-sticky {
+    right: 10px;
+    left: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto;
+    min-height: 72px;
+    padding: 9px 9px 9px 12px;
+    grid-template-columns: 78px minmax(0, 1fr);
+    gap: 8px;
+    border-radius: 16px;
+    background: rgba(255,255,255,.99);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .count-sticky > div:first-child {
+    min-width: 0;
+  }
+
+  .count-sticky > div:first-child span {
+    font-size: 9px;
+    line-height: 1.2;
+  }
+
+  .count-sticky > div:first-child strong {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+
+  .count-sticky .primary-button {
+    min-width: 0;
+    min-height: 48px;
+    padding: 0 11px;
+    font-size: 12px;
+  }
+
+  .save-message {
+    grid-column: 1 / -1;
+    margin-top: 0;
+    padding: 8px 9px;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+}
+
+@media (max-width: 390px) {
+  .count-row {
+    grid-template-columns: minmax(0, 1fr) 132px;
+  }
+
+  .qty-control {
+    width: 132px;
+    max-width: 132px;
+    grid-template-columns: 38px 46px 38px;
+    gap: 5px;
+  }
+
+  .count-sticky {
+    grid-template-columns: 68px minmax(0, 1fr);
+  }
+
+  .count-sticky .primary-button {
+    font-size: 11px;
+  }
+}
+
+
+/* =========================================================
+   V6.2.2 — BALANCED MOBILE UI
+   Less oversized, less clutter, clearer hierarchy.
+   ========================================================= */
+
+body {
+  font-size: 15px;
+}
+
+.kicker {
+  font-size: 10px;
+  letter-spacing: 1.1px;
+}
+
+.app-header h1 {
+  font-size: 21px;
+}
+
+.page-intro h2,
+.toolbar-copy h2 {
+  font-size: 26px;
+}
+
+.page-intro p:last-child,
+.toolbar-copy p,
+.section-head p {
+  font-size: 12px;
+}
+
+.section-head h3 {
+  font-size: 17px;
+}
+
+.primary-button,
+.secondary-button {
+  min-height: 43px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.icon-button {
+  width: 40px;
+  height: 40px;
+}
+
+/* ---------- New Home snapshot ---------- */
+
+.home-stock-snapshot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-stock-card {
+  min-width: 0;
+  min-height: 112px;
+  padding: 15px;
+  display: grid;
+  align-content: space-between;
+  gap: 4px;
+  border: 1px solid #e2e4e7;
+  border-radius: 16px;
+  background: #fff;
+  color: #202328;
+  text-align: left;
+}
+
+.home-stock-card.dark {
+  border-color: #17181b;
+  background: #17181b;
+  color: #fff;
+}
+
+.home-stock-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.home-stock-card-head > span {
+  color: #777c83;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.home-stock-card.dark .home-stock-card-head > span {
+  color: #b8bcc2;
+}
+
+.home-stock-card strong {
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.home-stock-card small {
+  overflow: hidden;
+  color: #9a9fa6;
+  font-size: 9px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-stock-card.dark small {
+  color: #aeb2b8;
+}
+
+.home-focus-card {
+  padding: 17px;
+}
+
+.home-focus-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-focus-head h3 {
+  margin: 2px 0 0;
+  font-size: 17px;
+}
+
+.home-focus-total {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 9px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #17181b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.home-focus-list {
+  margin-top: 11px;
+  display: grid;
+}
+
+.home-focus-list > button {
+  min-height: 58px;
+  padding: 9px 2px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 9px;
+  border: 0;
+  border-top: 1px solid #eceef0;
+  background: transparent;
+  color: #292c31;
+  text-align: left;
+}
+
+.home-focus-list > button:first-child {
+  border-top: 0;
+}
+
+.home-focus-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: #f1f2f3;
+}
+
+.home-focus-icon.warning {
+  background: #fff2e5;
+  color: #9a5a18;
+}
+
+.home-focus-list > button > div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+}
+
+.home-focus-list strong {
+  font-size: 12px;
+}
+
+.home-focus-list span {
+  margin-top: 1px;
+  overflow: hidden;
+  color: #969ba2;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-focus-list b {
+  min-width: 26px;
+  font-size: 15px;
+  text-align: right;
+}
+
+/* ---------- Tone down V6.2 oversized typography ---------- */
+
+.hero-card h2 {
+  font-size: clamp(30px, 4vw, 42px);
+}
+
+.hero-card > div:first-child > p:last-child {
+  font-size: 13px;
+}
+
+.metric-card span,
+.ops-kpi-grid span {
+  font-size: 11px;
+}
+
+.inventory-card h3,
+.holder-copy h3,
+.reservation-card-head h3,
+.job-no h3 {
+  font-size: 15px;
+}
+
+.compact-copy strong,
+.activity-copy strong {
+  font-size: 12px;
+}
+
+.compact-copy span,
+.compact-number span,
+.activity-copy span {
+  font-size: 10px;
+}
+
+.settings-list button strong {
+  font-size: 12px;
+}
+
+.settings-list button span {
+  font-size: 9px;
+}
+
+.transaction-modal-head h2 {
+  font-size: 23px;
+}
+
+.transaction-field label {
+  font-size: 12px;
+}
+
+.sheet-action strong {
+  font-size: 13px;
+}
+
+.sheet-action span {
+  font-size: 10px;
+}
+
+.ops-booking-head h3 {
+  font-size: 15px;
+}
+
+.ops-booking-head p,
+.ops-booking-meta > div,
+.ops-remark {
+  font-size: 10px;
+}
+
+.site-address-copy strong {
+  font-size: 11px;
+}
+
+.site-address-copy span {
+  font-size: 10px;
+}
+
+/* =========================================================
+   PHONE — refined compact mode
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .page-content,
+  .count-page-content {
+    width: calc(100% - 22px);
+    padding-top: 13px;
+  }
+
+  .page-stack {
+    gap: 11px;
+  }
+
+  .app-header {
+    height: 66px;
+    padding: 0 13px;
+  }
+
+  .app-header h1 {
+    font-size: 19px;
+  }
+
+  .icon-button {
+    width: 38px;
+    height: 38px;
+  }
+
+  .surface-card {
+    padding: 15px;
+    border-radius: 15px;
+  }
+
+  .hero-card {
+    min-height: 158px;
+    padding: 18px;
+    border-radius: 17px;
+  }
+
+  .hero-card h2 {
+    max-width: 270px;
+    font-size: 27px;
+    line-height: 1.05;
+  }
+
+  .hero-card > div:first-child > p:last-child {
+    max-width: 300px;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .hero-actions {
+    gap: 7px;
+  }
+
+  .hero-actions .primary-button,
+  .hero-actions .secondary-button {
+    min-height: 39px;
+    padding: 0 11px;
+    font-size: 11px;
+  }
+
+  .home-stock-snapshot {
+    gap: 7px;
+  }
+
+  .home-stock-card {
+    min-height: 96px;
+    padding: 11px;
+    border-radius: 14px;
+  }
+
+  .home-stock-card-head > span {
+    font-size: 9px;
+  }
+
+  .home-stock-card-head svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .home-stock-card strong {
+    font-size: 25px;
+  }
+
+  .home-stock-card small {
+    font-size: 8px;
+  }
+
+  .home-focus-card {
+    padding: 13px;
+  }
+
+  .home-focus-head h3 {
+    font-size: 15px;
+  }
+
+  .home-focus-total {
+    min-width: 31px;
+    height: 31px;
+    font-size: 12px;
+  }
+
+  .home-focus-list > button {
+    min-height: 54px;
+    grid-template-columns: 33px minmax(0, 1fr) auto auto;
+    gap: 8px;
+  }
+
+  .home-focus-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .home-focus-list strong {
+    font-size: 11px;
+  }
+
+  .home-focus-list span {
+    font-size: 8px;
+  }
+
+  .home-focus-list b {
+    font-size: 14px;
+  }
+
+  .page-intro h2,
+  .toolbar-copy h2 {
+    font-size: 22px;
+  }
+
+  .page-intro p:last-child,
+  .toolbar-copy p {
+    font-size: 11px;
+  }
+
+  .section-head h3 {
+    font-size: 16px;
+  }
+
+  .compact-row {
+    min-height: 61px;
+  }
+
+  .compact-copy strong,
+  .activity-copy strong {
+    font-size: 11px;
+  }
+
+  .compact-copy span,
+  .compact-number span,
+  .activity-copy span {
+    font-size: 9px;
+  }
+
+  .compact-number strong {
+    font-size: 15px;
+  }
+
+  /* Home only: don't show an excessively long stock preview. */
+  .dashboard-grid .compact-list .compact-row:nth-child(n + 5) {
+    display: none;
+  }
+
+  .mobile-nav {
+    height: 70px;
+    padding: 7px;
+    grid-template-columns: 1fr 1fr 58px 1fr 1fr;
+    border-radius: 20px;
+  }
+
+  .mobile-nav > button {
+    height: 52px;
+  }
+
+  .mobile-nav > button span {
+    font-size: 9px;
+  }
+
+  .mobile-nav .mobile-add {
+    width: 52px;
+    height: 52px;
+    border-radius: 15px;
+  }
+
+  .primary-button,
+  .secondary-button {
+    min-height: 42px;
+    font-size: 11px;
+  }
+
+  /* Keep form fields 16px on phone to prevent Safari zoom,
+     while labels and surrounding text stay compact. */
+  .transaction-field input,
+  .transaction-field select,
+  .transaction-field textarea,
+  .transaction-item select,
+  .transaction-qty input,
+  .calendar-controls select,
+  .count-location select {
+    font-size: 16px;
+  }
+
+  .transaction-modal-head h2 {
+    font-size: 21px;
+  }
+
+  .transaction-modal-head > div > p:last-child {
+    font-size: 10px;
+  }
+
+  .transaction-field label {
+    font-size: 11px;
+  }
+
+  .field-help,
+  .stock-hint,
+  .google-place-control small {
+    font-size: 9px;
+  }
+
+  .sheet-action {
+    min-height: 72px;
+  }
+
+  .sheet-action strong {
+    font-size: 12px;
+  }
+
+  .sheet-action span {
+    font-size: 9px;
+  }
+
+  .ops-kpi-grid > div {
+    min-height: 88px;
+    padding: 11px;
+  }
+
+  .ops-kpi-grid span {
+    font-size: 9px;
+  }
+
+  .ops-kpi-grid strong {
+    font-size: 24px;
+  }
+
+  .ops-kpi-grid small {
+    font-size: 8px;
+  }
+
+  .status-tabs.operations-tabs {
+    top: 66px;
+    padding-top: 7px;
+    padding-bottom: 7px;
+  }
+
+  .status-tabs button {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: 9px;
+  }
+
+  .ops-booking-card {
+    padding: 13px;
+  }
+
+  .ops-booking-head h3 {
+    font-size: 14px;
+  }
+
+  .ops-booking-head p,
+  .ops-booking-meta > div,
+  .ops-remark {
+    font-size: 9px;
+  }
+
+  .ops-product-tags span {
+    font-size: 9px;
+  }
+
+  .ops-card-actions .secondary-button,
+  .ops-card-actions .primary-button {
+    min-height: 38px;
+    font-size: 10px;
+  }
+
+  .site-address-copy strong {
+    font-size: 11px;
+  }
+
+  .site-address-copy span {
+    font-size: 9px;
+  }
+
+  .site-quick-links a {
+    min-height: 38px;
+    font-size: 10px;
+  }
+
+  .calendar-nav h3 {
+    font-size: 16px;
+  }
+
+  .calendar-mode-toggle button {
+    min-height: 36px;
+    font-size: 9px;
+  }
+
+  .calendar-week-day {
+    min-width: 205px;
+    padding: 12px;
+  }
+
+  .calendar-event.expanded .calendar-event-main strong {
+    font-size: 11px;
+  }
+
+  .calendar-event.expanded .calendar-event-main small {
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 390px) {
+  .home-stock-card {
+    padding: 10px 8px;
+  }
+
+  .home-stock-card strong {
+    font-size: 23px;
+  }
+
+  .home-stock-card small {
+    white-space: normal;
+  }
+
+  .hero-card h2 {
+    font-size: 25px;
+  }
+}
+
+
+/* =========================================================
+   V6.2.3 — MOBILE UI POLISH
+   Phone-first audit:
+   - Operations Board overview
+   - Stock Count action bar
+   - consistent type rhythm / spacing / touch targets
+   ========================================================= */
+
+/* ---------- Shared mobile rhythm ---------- */
+
+@media (max-width: 720px) {
+  body {
+    font-size: 15px;
+    line-height: 1.42;
+  }
+
+  .page-content,
+  .count-page-content {
+    width: calc(100% - 24px);
+    padding-top: 12px;
+    padding-bottom: 100px;
+  }
+
+  .page-stack {
+    gap: 12px;
+  }
+
+  .surface-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .page-intro {
+    gap: 13px;
+  }
+
+  .page-intro h2,
+  .toolbar-copy h2 {
+    font-size: 21px;
+    line-height: 1.15;
+    letter-spacing: -.35px;
+  }
+
+  .page-intro p:last-child,
+  .toolbar-copy p,
+  .section-head p {
+    font-size: 10.5px;
+    line-height: 1.5;
+  }
+
+  .section-head h3 {
+    font-size: 15px;
+    line-height: 1.2;
+  }
+
+  .kicker {
+    font-size: 9px;
+    letter-spacing: 1px;
+  }
+
+  .primary-button,
+  .secondary-button {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 11px;
+    font-size: 11px;
+  }
+
+  .icon-button {
+    width: 38px;
+    height: 38px;
+    border-radius: 11px;
+  }
+
+  .status-tabs {
+    gap: 6px;
+  }
+
+  .status-tabs button {
+    min-height: 36px;
+    padding: 0 11px;
+    font-size: 9px;
+    border-radius: 999px;
+  }
+
+  /* ---------- Header / bottom nav ---------- */
+
+  .app-header {
+    height: 64px;
+    padding: 0 12px;
+  }
+
+  .app-header h1 {
+    font-size: 18px;
+  }
+
+  .mobile-nav {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(520px, calc(100% - 16px));
+    height: 68px;
+    padding: 6px;
+    grid-template-columns: 1fr 1fr 56px 1fr 1fr;
+    border-radius: 19px;
+  }
+
+  .mobile-nav > button {
+    height: 50px;
+    gap: 3px;
+    border-radius: 13px;
+  }
+
+  .mobile-nav > button span {
+    font-size: 9px;
+    line-height: 1;
+  }
+
+  .mobile-nav .mobile-add {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+  }
+
+  /* ---------- Home ---------- */
+
+  .hero-card {
+    min-height: 148px;
+    padding: 16px;
+  }
+
+  .hero-card h2 {
+    font-size: 25px;
+  }
+
+  .home-stock-card {
+    min-height: 91px;
+    padding: 10px;
+  }
+
+  .home-stock-card strong {
+    font-size: 23px;
+  }
+
+  .home-focus-list > button {
+    min-height: 51px;
+  }
+
+  /* ---------- Stock / general cards ---------- */
+
+  .inventory-grid,
+  .reservation-grid {
+    gap: 9px;
+  }
+
+  .inventory-card,
+  .reservation-card,
+  .job-card {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .inventory-card h3,
+  .reservation-card-head h3,
+  .job-no h3,
+  .holder-copy h3 {
+    font-size: 14px;
+    line-height: 1.25;
+  }
+
+  .inventory-stat-row,
+  .job-details-grid {
+    gap: 8px;
+  }
+
+  .activity-row {
+    min-height: 61px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .activity-copy strong {
+    font-size: 11px;
+  }
+
+  .activity-copy span {
+    font-size: 9px;
+  }
+
+  /* ---------- Forms ---------- */
+
+  .transaction-modal {
+    max-height: 96dvh;
+  }
+
+  .transaction-modal-head {
+    padding: 16px 15px 13px;
+  }
+
+  .transaction-modal-head h2 {
+    font-size: 20px;
+  }
+
+  .transaction-scroll {
+    padding: 14px 15px 22px;
+  }
+
+  .transaction-field {
+    margin-bottom: 14px;
+  }
+
+  .transaction-field label {
+    margin-bottom: 6px;
+    font-size: 10.5px;
+  }
+
+  /* 16px is intentional: avoids iOS focus zoom. */
+  .transaction-field input,
+  .transaction-field select,
+  .transaction-field textarea,
+  .transaction-item select,
+  .transaction-qty input,
+  .count-location select {
+    font-size: 16px;
+  }
+
+  .transaction-field input,
+  .transaction-field select {
+    min-height: 48px;
+  }
+
+  .transaction-field textarea {
+    min-height: 78px;
+  }
+
+  .field-help,
+  .stock-hint,
+  .google-place-control small {
+    font-size: 8.5px;
+  }
+
+  .transaction-footer {
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  /* ---------- Quick actions ---------- */
+
+  .sheet-action {
+    min-height: 68px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .sheet-action strong {
+    font-size: 11.5px;
+  }
+
+  .sheet-action span {
+    font-size: 8.5px;
+  }
+
+  /* ---------- Calendar ---------- */
+
+  .calendar-toolbar {
+    gap: 10px;
+  }
+
+  .calendar-nav h3 {
+    font-size: 15px;
+  }
+
+  .calendar-controls select {
+    min-height: 42px;
+  }
+
+  .calendar-mode-toggle button {
+    min-height: 34px;
+  }
+
+  .calendar-week-grid {
+    grid-template-columns: repeat(7, minmax(195px, 1fr));
+  }
+
+  .calendar-week-day {
+    min-width: 195px;
+    padding: 11px;
+  }
+
+  /* ---------- More / Settings ---------- */
+
+  .settings-list button {
+    min-height: 61px;
+    padding-top: 9px;
+    padding-bottom: 9px;
+  }
+
+  .settings-list button strong {
+    font-size: 11px;
+  }
+
+  .settings-list button span {
+    font-size: 8px;
+  }
+}
+
+/* =========================================================
+   OPERATIONS BOARD — phone overview
+   ========================================================= */
+
+.ops-mini-card {
+  overflow: hidden;
+  border: 1px solid #e3e5e8;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.ops-mini-main {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  display: grid;
+  border: 0;
+  background: transparent;
+  color: #24272b;
+  text-align: left;
+}
+
+.ops-mini-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.ops-mini-deposit {
+  flex: 0 0 auto;
+  color: #337244;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.ops-mini-customer {
+  margin-top: 7px;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-mini-site {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #858a91;
+  font-size: 8.5px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-mini-info {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.ops-mini-info > span {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  color: #666c73;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-mini-products {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ops-mini-products > span {
+  max-width: 100%;
+  padding: 4px 5px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #f2f3f4;
+  color: #555b62;
+  font-size: 7.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ops-mini-actions {
+  min-height: 34px;
+  padding: 5px 6px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  border-top: 1px solid #eef0f1;
+  background: #fbfbfc;
+}
+
+.ops-mini-open {
+  min-width: 0;
+  min-height: 28px;
+  padding: 0 8px;
+  flex: 1;
+  border: 0;
+  border-radius: 7px;
+  background: #f0f1f2;
+  color: #34383e;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.ops-mini-complete {
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 8px;
+  background: #17181b;
+  color: #fff;
+}
+
+@media (max-width: 720px) {
+  .operations-intro {
+    gap: 10px;
+  }
+
+  .operations-intro .primary-button {
+    width: auto;
+    align-self: flex-start;
+  }
+
+  .ops-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .ops-kpi-grid > div {
+    min-height: 72px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .ops-kpi-grid span {
+    min-height: 22px;
+    font-size: 7.5px;
+    line-height: 1.2;
+  }
+
+  .ops-kpi-grid strong {
+    margin-top: 2px;
+    font-size: 20px;
+  }
+
+  .ops-kpi-grid small {
+    display: none;
+  }
+
+  .status-tabs.operations-tabs {
+    top: 64px;
+    margin-left: -12px;
+    margin-right: -12px;
+    padding: 7px 12px;
+  }
+
+  .ops-board {
+    margin: 0;
+    padding: 0 0 4px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .ops-column {
+    min-width: 0;
+    padding: 7px;
+    border-radius: 13px;
+    background: #f3f4f5;
+  }
+
+  .ops-column-head {
+    min-height: 43px;
+    padding: 4px 3px 7px;
+    gap: 5px;
+  }
+
+  .ops-column-head h3 {
+    font-size: 10px;
+    line-height: 1.15;
+  }
+
+  .ops-column-head span {
+    display: block;
+    margin-top: 1px;
+    font-size: 7px;
+    line-height: 1.2;
+  }
+
+  .ops-column-head strong {
+    width: 24px;
+    height: 24px;
+    border-radius: 8px;
+    font-size: 9px;
+  }
+
+  .ops-column-body {
+    gap: 6px;
+  }
+
+  .ops-empty {
+    min-height: 62px;
+    padding: 18px 5px;
+    display: grid;
+    place-items: center;
+    font-size: 8px;
+  }
+
+  .ops-mini-card .booking-chip {
+    padding: 3px 5px;
+    font-size: 6.5px;
+  }
+}
+
+@media (max-width: 370px) {
+  .ops-board {
+    gap: 6px;
+  }
+
+  .ops-column {
+    padding: 6px;
+  }
+
+  .ops-mini-main {
+    padding: 8px;
+  }
+
+  .ops-mini-customer {
+    font-size: 11px;
+  }
+}
+
+/* =========================================================
+   STOCK COUNT — stable phone layout
+   ========================================================= */
+
+.count-save-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.count-change-summary {
+  min-width: 56px;
+  display: grid;
+  line-height: 1;
+}
+
+.count-change-summary > span {
+  color: #969ba2;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+.count-change-summary > strong {
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.count-save-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+@media (max-width: 720px) {
+  .stock-count-shell {
+    gap: 10px;
+    padding-bottom: 96px;
+  }
+
+  .stock-count-heading {
+    gap: 9px;
+  }
+
+  .stock-count-heading h2 {
+    margin-top: 2px;
+    font-size: 21px;
+  }
+
+  .stock-count-heading p:last-child {
+    margin-top: 2px;
+    max-width: none;
+    font-size: 9px;
+    line-height: 1.4;
+  }
+
+  .count-location {
+    padding: 12px;
+  }
+
+  .count-location label {
+    font-size: 10px;
+  }
+
+  .count-location > span {
+    margin-top: 6px;
+    font-size: 8px;
+  }
+
+  .count-filters button {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 8px;
+  }
+
+  .count-list {
+    gap: 6px;
+  }
+
+  .count-row {
+    min-height: 74px;
+    padding: 10px;
+    grid-template-columns: minmax(0, 1fr) 128px;
+    gap: 8px;
+    border-radius: 13px;
+  }
+
+  .count-row-copy > span {
+    font-size: 7px;
+  }
+
+  .count-row-copy strong {
+    margin-top: 2px;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .count-row-copy small {
+    margin-top: 3px;
+    font-size: 8px;
+  }
+
+  .qty-control {
+    width: 128px;
+    max-width: 128px;
+    grid-template-columns: 37px 44px 37px;
+    gap: 5px;
+  }
+
+  .qty-control button,
+  .qty-control input {
+    height: 42px;
+    border-radius: 10px;
+  }
+
+  .qty-control button {
+    font-size: 17px;
+  }
+
+  .qty-control input {
+    font-size: 16px;
+  }
+
+  /* Sticky within the Stock Count page instead of floating
+     independently across the viewport. This keeps it aligned. */
+  .count-sticky {
+    position: sticky;
+    right: auto;
+    left: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    z-index: 55;
+    width: 100%;
+    min-height: 0;
+    padding: 7px;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+    border-radius: 14px;
+    background: rgba(255,255,255,.99);
+    box-shadow: 0 10px 32px rgba(17,18,20,.13);
+  }
+
+  .count-save-main {
+    min-height: 48px;
+    grid-template-columns: 58px minmax(0, 1fr);
+    gap: 7px;
+  }
+
+  .count-change-summary {
+    min-width: 0;
+    padding-left: 4px;
+  }
+
+  .count-change-summary > span {
+    font-size: 7.5px;
+  }
+
+  .count-change-summary > strong {
+    font-size: 17px;
+  }
+
+  .count-save-button {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 10px;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .save-message {
+    grid-column: auto;
+    margin: 0;
+    padding: 7px 8px;
+    font-size: 8.5px;
+    line-height: 1.35;
+  }
+}
+
+@media (max-width: 360px) {
+  .count-row {
+    grid-template-columns: minmax(0, 1fr) 118px;
+  }
+
+  .qty-control {
+    width: 118px;
+    max-width: 118px;
+    grid-template-columns: 34px 40px 34px;
+  }
+}
+
+
+/* =========================================================
+   V6.2.3a — Stock Count save bar alignment hotfix
+   Clears an older translateX(-50%) rule that remained active
+   after the save bar was changed from fixed -> sticky.
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .count-sticky {
+    position: sticky;
+    left: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .count-save-main {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .count-save-button {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+
+/* =========================================================
+   V6.2.3b — Stock Count product-name layout
+   Give product names more horizontal room on phone.
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .count-row {
+    grid-template-columns: minmax(0, 1fr) 116px !important;
+    gap: 7px !important;
+  }
+
+  .count-row-copy {
+    min-width: 0;
+    padding-right: 2px;
+  }
+
+  .count-row-copy strong {
+    display: block;
+    max-width: 100%;
+    font-size: 11.5px !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .qty-control {
+    width: 116px !important;
+    max-width: 116px !important;
+    grid-template-columns: 33px 40px 33px !important;
+    gap: 5px !important;
+  }
+
+  .qty-control button,
+  .qty-control input {
+    height: 40px !important;
+  }
+
+  .qty-control button {
+    font-size: 16px !important;
+  }
+
+  .qty-control input {
+    padding: 0 !important;
+    font-size: 15px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  .count-row {
+    grid-template-columns: minmax(0, 1fr) 108px !important;
+    gap: 6px !important;
+  }
+
+  .count-row-copy strong {
+    font-size: 11px !important;
+  }
+
+  .qty-control {
+    width: 108px !important;
+    max-width: 108px !important;
+    grid-template-columns: 31px 36px 31px !important;
+    gap: 5px !important;
+  }
+}
+
+
+/* =========================================================
+   V6.2.3c — Stock Count full product names
+   Never hide product names behind "..."
+   ========================================================= */
+
+@media (max-width: 720px) {
+  .count-row {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 7px !important;
+  }
+
+  .count-row-copy {
+    flex: 1 1 auto !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    padding-right: 2px;
+  }
+
+  .count-row-copy strong {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: nowrap !important;
+    font-size: 10.75px !important;
+    line-height: 1.2 !important;
+  }
+
+  .qty-control {
+    flex: 0 0 104px !important;
+    width: 104px !important;
+    max-width: 104px !important;
+    grid-template-columns: 30px 34px 30px !important;
+    gap: 5px !important;
+  }
+
+  .qty-control button,
+  .qty-control input {
+    height: 40px !important;
+  }
+
+  .qty-control input {
+    font-size: 14px !important;
+  }
+}
+
+/* Very narrow phones: keep every character visible.
+   Only here do we allow a second line instead of truncating. */
+@media (max-width: 360px) {
+  .count-row-copy strong {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    font-size: 10.5px !important;
+  }
+
+  .qty-control {
+    flex-basis: 100px !important;
+    width: 100px !important;
+    max-width: 100px !important;
+    grid-template-columns: 29px 32px 29px !important;
   }
 }

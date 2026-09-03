@@ -29,6 +29,7 @@ import {
   Plus,
   Trash2,
   RefreshCw,
+  Save,
   Search,
   Star,
   Settings,
@@ -391,6 +392,12 @@ function App() {
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [activeTab])
+
   const [actionMode, setActionMode] = useState(null)
   const [actionItems, setActionItems] = useState([
     { product_id: '', quantity: 1 },
@@ -2202,26 +2209,21 @@ function App() {
     setStockCountMessage('')
     setStockCountError('')
 
-    const { data, error } = await supabase.rpc(
-      'get_stock_by_location',
-      { p_location_id: locationId }
-    )
-
-    if (error) {
-      console.error(error)
-      setStockCountError('读取这个 Stock Holder 的库存失败。')
-      setStockCountLoading(false)
-      return
-    }
-
+    // V6.2.1:
+    // The app already loads the stock-by-location ledger in loadAppData().
+    // Reuse that snapshot here instead of making another RPC every time
+    // Stock Count opens or the holder changes.
     const current = {}
+
     inventory.forEach((item) => {
       current[item.product_id] = 0
     })
 
-    ;(data || []).forEach((row) => {
-      current[row.product_id] = Number(row.quantity || 0)
-    })
+    locationStock
+      .filter((row) => row.location_id === locationId)
+      .forEach((row) => {
+        current[row.product_id] = Number(row.quantity || 0)
+      })
 
     setHolderStock(current)
     setStockCountValues(current)
@@ -2295,8 +2297,12 @@ function App() {
       return
     }
 
+    const savedValues = { ...stockCountValues }
+
     await loadAppData()
-    await loadHolderStock(selectedLocationId)
+
+    setHolderStock(savedValues)
+    setStockCountValues(savedValues)
 
     setStockCountMessage(
       `已保存 ${selectedLocation?.name || 'Stock Holder'} 的库存`
@@ -2911,7 +2917,7 @@ function App() {
             onClick={() => setActiveTab('inventory')}
           >
             <Boxes size={19} />
-            <span>Inventory</span>
+            <span>Stock</span>
           </button>
 
           {canManageInventory || canCompleteJobs ? (
@@ -2931,7 +2937,7 @@ function App() {
               onClick={() => setActiveTab('operations')}
             >
               <CalendarDays size={19} />
-              <span>Operations</span>
+              <span>Ops</span>
             </button>
           ) : (
             <button
@@ -3635,7 +3641,7 @@ function OperationsPage({
   const todayBookings = scheduled.filter((item) => item.installation_date === localDate)
   const todayFollowups = pendingFollowups.filter((item) => item.scheduled_date === localDate)
 
-  const bookingCard = (booking) => (
+  const bookingCard = (booking, compact = false) => (
     <BookingCardV6
       key={booking.id}
       booking={booking}
@@ -3648,6 +3654,7 @@ function OperationsPage({
       openHandover={openHandover}
       openCompleteInstallation={openCompleteInstallation}
       cancelReservation={cancelReservation}
+      compact={compact}
     />
   )
 
@@ -3687,10 +3694,37 @@ function OperationsPage({
 
       {operationsView === 'board' && (
         <section className="ops-board">
-          <OpsColumn title="Promotion Booked" subtitle="Product TBC" count={promotion.length}>{promotion.map(bookingCard)}</OpsColumn>
-          <OpsColumn title="Installation TBC" subtitle="Product confirmed / reserved" count={tbc.length}>{tbc.map(bookingCard)}</OpsColumn>
-          <OpsColumn title="Estimated" subtitle="Approximate timing" count={estimated.length}>{estimated.map(bookingCard)}</OpsColumn>
-          <OpsColumn title="Scheduled" subtitle="Exact date" count={scheduled.length}>{scheduled.map(bookingCard)}</OpsColumn>
+          <OpsColumn
+            title="Promotion"
+            subtitle="Product TBC"
+            count={promotion.length}
+          >
+            {promotion.map((booking) => bookingCard(booking, true))}
+          </OpsColumn>
+
+          <OpsColumn
+            title="Install TBC"
+            subtitle="Stock reserved"
+            count={tbc.length}
+          >
+            {tbc.map((booking) => bookingCard(booking, true))}
+          </OpsColumn>
+
+          <OpsColumn
+            title="Estimated"
+            subtitle="Approx. timing"
+            count={estimated.length}
+          >
+            {estimated.map((booking) => bookingCard(booking, true))}
+          </OpsColumn>
+
+          <OpsColumn
+            title="Scheduled"
+            subtitle="Exact date"
+            count={scheduled.length}
+          >
+            {scheduled.map((booking) => bookingCard(booking, true))}
+          </OpsColumn>
         </section>
       )}
 
@@ -3753,7 +3787,10 @@ function OperationsCalendarV61({
   currentRole,
   profile,
 }) {
-  const [calendarMode, setCalendarMode] = useState('month')
+  const [calendarMode, setCalendarMode] = useState(() => {
+    if (typeof window === 'undefined') return 'month'
+    return window.innerWidth <= 720 ? 'week' : 'month'
+  })
   const [cursor, setCursor] = useState(() => new Date())
   const [technicianFilter, setTechnicianFilter] = useState(() =>
     currentRole === 'technician' ? profile?.location_id || '' : 'all'
@@ -4235,8 +4272,17 @@ function OpsColumn({ title, subtitle, count, children }) {
 }
 
 function BookingCardV6({
-  booking, productById, productDisplayName, locationById, canManage, canCompleteJobs,
-  openEditBooking, openHandover, openCompleteInstallation, cancelReservation,
+  booking,
+  productById,
+  productDisplayName,
+  locationById,
+  canManage,
+  canCompleteJobs,
+  openEditBooking,
+  openHandover,
+  openCompleteInstallation,
+  cancelReservation,
+  compact = false,
 }) {
   const installer = locationById(booking.installer_location_id)
   const productTbc = booking.booking_type === 'promotion_only'
@@ -4245,6 +4291,106 @@ function BookingCardV6({
     : booking.schedule_type === 'estimated'
       ? booking.estimated_installation || 'Estimated'
       : 'TBC'
+
+  if (compact) {
+    const products = productTbc
+      ? ['Product TBC']
+      : (booking.reservation_items || []).map(
+          (item) =>
+            `${item.quantity}× ${productDisplayName(
+              productById(item.product_id)
+            )}`
+        )
+
+    return (
+      <article className="ops-mini-card">
+        <button
+          className="ops-mini-main"
+          onClick={() => {
+            if (canManage) {
+              openEditBooking(booking, productTbc)
+            } else if (canCompleteJobs && !productTbc) {
+              openCompleteInstallation(booking)
+            }
+          }}
+        >
+          <div className="ops-mini-top">
+            <span
+              className={`booking-chip ${
+                productTbc ? 'promo' : booking.schedule_type
+              }`}
+            >
+              {productTbc
+                ? 'PROMO'
+                : booking.schedule_type === 'exact'
+                  ? 'SCHEDULED'
+                  : booking.schedule_type === 'estimated'
+                    ? 'EST.'
+                    : 'TBC'}
+            </span>
+
+            {Number(booking.deposit_amount || 0) > 0 && (
+              <span className="ops-mini-deposit">
+                RM{Number(booking.deposit_amount).toFixed(0)}
+              </span>
+            )}
+          </div>
+
+          <strong className="ops-mini-customer">
+            {booking.customer_name}
+          </strong>
+
+          <span className="ops-mini-site">
+            {booking.unit_no ? `${booking.unit_no} • ` : ''}
+            {booking.installation_area ||
+              booking.place_name ||
+              'Site TBC'}
+          </span>
+
+          <div className="ops-mini-info">
+            <span>
+              <CalendarDays size={12} />
+              {timing}
+            </span>
+            <span>
+              <UserRound size={12} />
+              {installer?.name || 'Tech TBC'}
+            </span>
+          </div>
+
+          <div className="ops-mini-products">
+            {products.slice(0, 2).map((label, index) => (
+              <span key={`${booking.id}-${index}`}>{label}</span>
+            ))}
+            {products.length > 2 && (
+              <span>+{products.length - 2}</span>
+            )}
+          </div>
+        </button>
+
+        <div className="ops-mini-actions">
+          {canManage && (
+            <button
+              className="ops-mini-open"
+              onClick={() => openEditBooking(booking, productTbc)}
+            >
+              {productTbc ? 'Confirm' : 'Open'}
+            </button>
+          )}
+
+          {canCompleteJobs && !productTbc && (
+            <button
+              className="ops-mini-complete"
+              onClick={() => openCompleteInstallation(booking)}
+              title="Complete installation"
+            >
+              <Check size={14} />
+            </button>
+          )}
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className="ops-booking-card">
@@ -5293,17 +5439,16 @@ function Dashboard({
 
   const topProducts = inventory
     .filter((item) => item.category === 'smart_lock')
-    .slice(0, 6)
+    .slice(0, 5)
 
   return (
     <div className="page-stack fade-in">
       <section className="hero-card">
         <div>
           <p className="kicker light">LIVE STOCK OVERVIEW</p>
-          <h2>Everything in one place.</h2>
+          <h2>SVR at a glance.</h2>
           <p>
-            Current stock, reserved units and stock holders — built for
-            quick checking on phone or desktop.
+            Stock, bookings and follow-ups — the important things first.
           </p>
         </div>
 
@@ -5325,103 +5470,123 @@ function Dashboard({
         </div>
       </section>
 
-      <section className="metric-grid">
-        <MetricCard
-          label="Smart Locks"
-          value={totals.totalSmartLocks}
-          caption="Physical units"
-          icon={ShieldCheck}
-        />
-        <MetricCard
-          label="Lock Bodies"
-          value={totals.totalLockBodies}
-          caption="Physical units"
-          icon={Wrench}
-        />
-        <MetricCard
-          label="Reserved"
-          value={totals.totalReserved}
-          caption="Customer orders"
-          icon={PackageCheck}
-        />
-        <MetricCard
-          label="Available"
-          value={totals.totalAvailable}
-          caption="Ready to sell"
-          icon={CheckCircle2}
-          dark
-        />
-      </section>
-
-      <section className="operation-summary-grid">
+      <section className="home-stock-snapshot">
         <button
-          className="operation-summary-card"
+          className="home-stock-card"
+          onClick={() => setActiveTab('inventory')}
+        >
+          <div className="home-stock-card-head">
+            <span>Physical</span>
+            <Boxes size={17} />
+          </div>
+          <strong>
+            {totals.totalSmartLocks + totals.totalLockBodies}
+          </strong>
+          <small>
+            {totals.totalSmartLocks} locks • {totals.totalLockBodies} bodies
+          </small>
+        </button>
+
+        <button
+          className="home-stock-card"
           onClick={() => setActiveTab('operations')}
         >
-          <div className="operation-summary-icon">
-            <PackageCheck size={20} />
+          <div className="home-stock-card-head">
+            <span>Reserved</span>
+            <PackageCheck size={17} />
           </div>
+          <strong>{totals.totalReserved}</strong>
+          <small>Customer bookings</small>
+        </button>
+
+        <button
+          className="home-stock-card dark"
+          onClick={() => setActiveTab('inventory')}
+        >
+          <div className="home-stock-card-head">
+            <span>Available</span>
+            <CheckCircle2 size={17} />
+          </div>
+          <strong>{totals.totalAvailable}</strong>
+          <small>Ready to use / sell</small>
+        </button>
+      </section>
+
+      <section className="surface-card home-focus-card">
+        <div className="home-focus-head">
           <div>
-            <span>Active Bookings</span>
-            <strong>
+            <p className="kicker">NEEDS ATTENTION</p>
+            <h3>Quick follow-up</h3>
+          </div>
+          <span className="home-focus-total">
+            {
+              reservations.filter((item) => item.status === 'reserved')
+                .length +
+              followups.filter((item) =>
+                ['pending', 'scheduled'].includes(item.status)
+              ).length +
+              jobs.filter(
+                (item) => item.invoice_status === 'not_invoiced'
+              ).length
+            }
+          </span>
+        </div>
+
+        <div className="home-focus-list">
+          <button onClick={() => setActiveTab('operations')}>
+            <div className="home-focus-icon">
+              <CalendarDays size={16} />
+            </div>
+            <div>
+              <strong>Active Bookings</strong>
+              <span>Reserved / TBC / scheduled</span>
+            </div>
+            <b>
               {
                 reservations.filter(
                   (item) => item.status === 'reserved'
                 ).length
               }
-            </strong>
-            <small>Booked / reserved / scheduled</small>
-          </div>
-          <ChevronRight size={18} />
-        </button>
+            </b>
+            <ChevronRight size={16} />
+          </button>
 
-        <button
-          className="operation-summary-card"
-          onClick={() => setActiveTab('operations')}
-        >
-          <div className="operation-summary-icon"><Star size={20} /></div>
-          <div>
-            <span>Promotion / Product TBC</span>
-            <strong>{reservations.filter((item) => item.status === 'reserved' && item.booking_type === 'promotion_only').length}</strong>
-            <small>Deposit booked, model not chosen</small>
-          </div>
-          <ChevronRight size={18} />
-        </button>
+          <button onClick={() => setActiveTab('operations')}>
+            <div className="home-focus-icon warning">
+              <AlertTriangle size={16} />
+            </div>
+            <div>
+              <strong>Pending Settle</strong>
+              <span>Need return / follow-up</span>
+            </div>
+            <b>
+              {
+                followups.filter((item) =>
+                  ['pending', 'scheduled'].includes(item.status)
+                ).length
+              }
+            </b>
+            <ChevronRight size={16} />
+          </button>
 
-        <button
-          className="operation-summary-card invoice-summary"
-          onClick={() => setActiveTab('jobs')}
-        >
-          <div className="operation-summary-icon">
-            <ReceiptText size={20} />
-          </div>
-          <div>
-            <span>Jobs Not Invoiced</span>
-            <strong>
+          <button onClick={() => setActiveTab('jobs')}>
+            <div className="home-focus-icon">
+              <ReceiptText size={16} />
+            </div>
+            <div>
+              <strong>Not Invoiced</strong>
+              <span>Completed jobs to bill</span>
+            </div>
+            <b>
               {
                 jobs.filter(
                   (item) => item.invoice_status === 'not_invoiced'
                 ).length
               }
-            </strong>
-            <small>Need invoice / billing follow-up</small>
-          </div>
-          <ChevronRight size={18} />
-        </button>
-
-        <button
-          className="operation-summary-card"
-          onClick={() => setActiveTab('operations')}
-        >
-          <div className="operation-summary-icon"><AlertTriangle size={20} /></div>
-          <div>
-            <span>Pending Settle</span>
-            <strong>{followups.filter((item) => ['pending', 'scheduled'].includes(item.status)).length}</strong>
-            <small>Need return / follow-up</small>
-          </div>
-          <ChevronRight size={18} />
-        </button>
-
+            </b>
+            <ChevronRight size={16} />
+          </button>
+        </div>
       </section>
 
       <div className="dashboard-grid">
@@ -6755,22 +6920,33 @@ function StockCountPage({
       )}
 
       <div className="count-sticky">
-        <div>
-          <span>Unsaved changes</span>
-          <strong>{stockCountChanges}</strong>
-        </div>
+        <div className="count-save-main">
+          <div className="count-change-summary">
+            <span>Changed</span>
+            <strong>{stockCountChanges}</strong>
+          </div>
 
-        <button
-          className="primary-button"
-          onClick={saveStockCount}
-          disabled={
-            stockCountSaving ||
-            stockCountLoading ||
-            stockCountChanges === 0
-          }
-        >
-          {stockCountSaving ? 'Saving...' : 'Save Stock Count'}
-        </button>
+          <button
+            className="primary-button count-save-button"
+            onClick={saveStockCount}
+            disabled={
+              stockCountSaving ||
+              stockCountLoading ||
+              stockCountChanges === 0
+            }
+          >
+            {stockCountSaving ? (
+              'Saving...'
+            ) : stockCountChanges === 0 ? (
+              'No Changes'
+            ) : (
+              <>
+                <Save size={15} />
+                <span>Save Count</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {stockCountMessage && (
           <p className="save-message success">{stockCountMessage}</p>
