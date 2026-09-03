@@ -455,6 +455,67 @@ function App() {
 
   const [operationsView, setOperationsView] = useState('board')
 
+  const [bookingEditor, setBookingEditor] = useState(null)
+  const [bookingForm, setBookingForm] = useState({
+    customer_name: '',
+    customer_phone: '',
+    unit_no: '',
+    installation_area: '',
+    installation_address: '',
+    place_name: '',
+    google_place_id: '',
+    latitude: null,
+    longitude: null,
+    booking_type: 'product_confirmed',
+    promotion_name: '',
+    selling_price: '',
+    deposit_amount: '',
+    payment_status: 'deposit_paid',
+    schedule_type: 'tbc',
+    installation_date: '',
+    installation_time: '',
+    estimated_installation: '',
+    installer_location_id: '',
+    remark: '',
+  })
+  const [bookingItems, setBookingItems] = useState([{ product_id: '', quantity: 1 }])
+  const [bookingSaving, setBookingSaving] = useState(false)
+  const [bookingError, setBookingError] = useState('')
+
+  const [handoverBooking, setHandoverBooking] = useState(null)
+  const [handoverForm, setHandoverForm] = useState({ from_location_id: '', to_location_id: '' })
+  const [handoverSaving, setHandoverSaving] = useState(false)
+  const [handoverError, setHandoverError] = useState('')
+
+  const [completionBooking, setCompletionBooking] = useState(null)
+  const [completionForm, setCompletionForm] = useState({
+    stock_location_id: '',
+    customer_taught: false,
+    review_asked: false,
+    review_received: false,
+    completion_remark: '',
+    pending_settle: false,
+    pending_issue: '',
+  })
+  const [completionFiles, setCompletionFiles] = useState([])
+  const [completionSaving, setCompletionSaving] = useState(false)
+  const [completionError, setCompletionError] = useState('')
+
+  const [followups, setFollowups] = useState([])
+  const [jobPhotos, setJobPhotos] = useState([])
+  const [followupEditor, setFollowupEditor] = useState(null)
+  const [followupForm, setFollowupForm] = useState({
+    technician_location_id: '',
+    scheduled_date: '',
+    scheduled_time: '',
+    remark: '',
+    resolution_note: '',
+    review_asked: false,
+    review_received: false,
+  })
+  const [followupSaving, setFollowupSaving] = useState(false)
+  const [followupError, setFollowupError] = useState('')
+
   function closeTopOverlayForBack() {
     if (passwordOpen) {
       setPasswordOpen(false)
@@ -625,67 +686,6 @@ function App() {
     actionMode,
     mobileActionsOpen,
   ])
-
-  const [bookingEditor, setBookingEditor] = useState(null)
-  const [bookingForm, setBookingForm] = useState({
-    customer_name: '',
-    customer_phone: '',
-    unit_no: '',
-    installation_area: '',
-    installation_address: '',
-    place_name: '',
-    google_place_id: '',
-    latitude: null,
-    longitude: null,
-    booking_type: 'product_confirmed',
-    promotion_name: '',
-    selling_price: '',
-    deposit_amount: '',
-    payment_status: 'deposit_paid',
-    schedule_type: 'tbc',
-    installation_date: '',
-    installation_time: '',
-    estimated_installation: '',
-    installer_location_id: '',
-    remark: '',
-  })
-  const [bookingItems, setBookingItems] = useState([{ product_id: '', quantity: 1 }])
-  const [bookingSaving, setBookingSaving] = useState(false)
-  const [bookingError, setBookingError] = useState('')
-
-  const [handoverBooking, setHandoverBooking] = useState(null)
-  const [handoverForm, setHandoverForm] = useState({ from_location_id: '', to_location_id: '' })
-  const [handoverSaving, setHandoverSaving] = useState(false)
-  const [handoverError, setHandoverError] = useState('')
-
-  const [completionBooking, setCompletionBooking] = useState(null)
-  const [completionForm, setCompletionForm] = useState({
-    stock_location_id: '',
-    customer_taught: false,
-    review_asked: false,
-    review_received: false,
-    completion_remark: '',
-    pending_settle: false,
-    pending_issue: '',
-  })
-  const [completionFiles, setCompletionFiles] = useState([])
-  const [completionSaving, setCompletionSaving] = useState(false)
-  const [completionError, setCompletionError] = useState('')
-
-  const [followups, setFollowups] = useState([])
-  const [jobPhotos, setJobPhotos] = useState([])
-  const [followupEditor, setFollowupEditor] = useState(null)
-  const [followupForm, setFollowupForm] = useState({
-    technician_location_id: '',
-    scheduled_date: '',
-    scheduled_time: '',
-    remark: '',
-    resolution_note: '',
-    review_asked: false,
-    review_received: false,
-  })
-  const [followupSaving, setFollowupSaving] = useState(false)
-  const [followupError, setFollowupError] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
