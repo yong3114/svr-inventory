@@ -40,7 +40,6 @@ import {
   SlidersHorizontal,
   UserCog,
   UserRound,
-  UserPlus,
   Users,
   Warehouse,
   Wrench,
@@ -358,16 +357,6 @@ function App() {
   const [accessSaving, setAccessSaving] = useState(false)
   const [accessError, setAccessError] = useState('')
 
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviteForm, setInviteForm] = useState({
-    display_name: '',
-    email: '',
-    role: 'viewer',
-    location_id: '',
-  })
-  const [inviteSaving, setInviteSaving] = useState(false)
-  const [inviteError, setInviteError] = useState('')
-
   const [passwordOpen, setPasswordOpen] = useState(false)
   const [passwordForm, setPasswordForm] = useState({
     password: '',
@@ -375,26 +364,6 @@ function App() {
   })
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordError, setPasswordError] = useState('')
-  const [inviteLanding] = useState(() => {
-    if (typeof window === 'undefined') return false
-
-    const url = new URL(window.location.href)
-    const hashParams = new URLSearchParams(
-      window.location.hash.replace(/^#/, '')
-    )
-    const type =
-      url.searchParams.get('type') ||
-      hashParams.get('type')
-
-    return (
-      type === 'invite' ||
-      type === 'recovery' ||
-      url.searchParams.get('password_setup') === '1' ||
-      url.searchParams.has('code') ||
-      hashParams.has('access_token')
-    )
-  })
-
   const [dataLoading, setDataLoading] = useState(false)
   const [dataError, setDataError] = useState('')
 
@@ -529,10 +498,6 @@ function App() {
   function closeTopOverlayForBack() {
     if (passwordOpen) {
       setPasswordOpen(false)
-      return true
-    }
-    if (inviteOpen) {
-      setInviteOpen(false)
       return true
     }
     if (accessUser) {
@@ -683,7 +648,6 @@ function App() {
     activeTab,
     operationsView,
     passwordOpen,
-    inviteOpen,
     accessUser,
     productEditor,
     locationEditor,
@@ -697,128 +661,24 @@ function App() {
     mobileActionsOpen,
   ])
 
-  async function establishAuthSessionFromUrl() {
-    if (typeof window === 'undefined') {
-      const { data, error } = await supabase.auth.getSession()
-      return { session: data?.session || null, error }
-    }
-
-    const url = new URL(window.location.href)
-    const hashParams = new URLSearchParams(
-      window.location.hash.replace(/^#/, '')
-    )
-
-    const code = url.searchParams.get('code')
-    const tokenHash = url.searchParams.get('token_hash')
-    const type =
-      url.searchParams.get('type') ||
-      hashParams.get('type')
-    const accessToken = hashParams.get('access_token')
-    const refreshToken = hashParams.get('refresh_token')
-
-    // 1. Implicit invite / recovery flow.
-    if (accessToken && refreshToken) {
-      const result = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      })
-
-      if (!result.error && result.data?.session) {
-        return {
-          session: result.data.session,
-          error: null,
-        }
-      }
-    }
-
-    // 2. PKCE flow.
-    if (code) {
-      const result = await supabase.auth.exchangeCodeForSession(code)
-
-      if (!result.error && result.data?.session) {
-        return {
-          session: result.data.session,
-          error: null,
-        }
-      }
-    }
-
-    // 3. Custom email template using token_hash.
-    if (
-      tokenHash &&
-      ['invite', 'recovery'].includes(type || '')
-    ) {
-      const result = await supabase.auth.verifyOtp({
-        token_hash: tokenHash,
-        type,
-      })
-
-      if (!result.error && result.data?.session) {
-        return {
-          session: result.data.session,
-          error: null,
-        }
-      }
-    }
-
-    // 4. The Supabase client may already have processed the URL.
-    const current = await supabase.auth.getSession()
-
-    return {
-      session: current.data?.session || null,
-      error: current.error || null,
-    }
-  }
-
   useEffect(() => {
-    let cancelled = false
-
-    async function initializeAuth() {
-      const result = await establishAuthSessionFromUrl()
-
-      if (cancelled) return
-
-      setSession(result.session)
-
-      if (result.session && inviteLanding) {
-        setPasswordForm({ password: '', confirm: '' })
-        setPasswordError('')
-        setPasswordOpen(true)
-      } else if (!result.session && inviteLanding) {
-        setLoginError(
-          'This invitation link is expired or no longer valid. Ask the Owner to Resend Invite.'
-        )
-      }
-
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
       setAuthLoading(false)
-    }
-
-    initializeAuth()
+    })
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (cancelled) return
-
       setSession(newSession)
 
-      if (
-        newSession &&
-        (inviteLanding ||
-          event === 'PASSWORD_RECOVERY' ||
-          event === 'SIGNED_IN')
-      ) {
-        setPasswordForm({ password: '', confirm: '' })
-        setPasswordError('')
+      if (newSession && event === 'PASSWORD_RECOVERY') {
         setPasswordOpen(true)
       }
     })
 
-    return () => {
-      cancelled = true
-      subscription.unsubscribe()
-    }
-  }, [inviteLanding])
+    return () => subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     if (session) loadAppData()
@@ -1557,96 +1417,6 @@ function App() {
   }
 
 
-  async function resendUserInvite() {
-    if (!accessUser || !isOwner || accessSaving) return
-
-    const ok = window.confirm(
-      `Resend invitation to ${accessUser.email}?\n\nUse this for an invited user who has NOT finished setting up their account.`
-    )
-
-    if (!ok) return
-
-    setAccessSaving(true)
-    setAccessError('')
-
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        'invite-user',
-        {
-          body: {
-            action: 'resend_invite',
-            user_id: accessUser.user_id,
-          },
-        }
-      )
-
-      if (error) throw error
-      if (!data?.ok) {
-        throw new Error(data?.error || 'Unable to resend invitation')
-      }
-
-      setAccessUser(null)
-      showToast(`New invitation sent to ${data.email || accessUser.email}`)
-      await loadAppData()
-    } catch (error) {
-      console.error(error)
-      setAccessError(
-        error?.message ||
-          'Resend Invite failed. Please try again.'
-      )
-    } finally {
-      setAccessSaving(false)
-    }
-  }
-
-  async function deleteUserAccount() {
-    if (!accessUser || !isOwner || accessSaving) return
-
-    if (accessUser.user_id === session?.user?.id) {
-      setAccessError('You cannot delete your own Owner account.')
-      return
-    }
-
-    const ok = window.confirm(
-      `DELETE ${accessUser.display_name || accessUser.email}?\n\nThis permanently removes the login account. Use this for test / wrong / unused users. This cannot be undone.`
-    )
-
-    if (!ok) return
-
-    setAccessSaving(true)
-    setAccessError('')
-
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        'invite-user',
-        {
-          body: {
-            action: 'delete_user',
-            user_id: accessUser.user_id,
-          },
-        }
-      )
-
-      if (error) throw error
-      if (!data?.ok) {
-        throw new Error(data?.error || 'Unable to delete user')
-      }
-
-      setAccessUser(null)
-      showToast('User deleted')
-      await loadAppData()
-    } catch (error) {
-      console.error(error)
-      setAccessError(
-        error?.message ||
-          'Delete User failed. If this user already owns records, deactivate the account instead.'
-      )
-    } finally {
-      setAccessSaving(false)
-    }
-  }
-
-
   function openInventorySettings() {
     if (!isManagement) {
       showToast('Owner/Admin only')
@@ -1768,98 +1538,6 @@ function App() {
   }
 
 
-  function openInviteUser() {
-    if (!isOwner) {
-      showToast('Only Owner can invite users')
-      return
-    }
-
-    setInviteForm({
-      display_name: '',
-      email: '',
-      role: 'viewer',
-      location_id: '',
-    })
-    setInviteError('')
-    setInviteOpen(true)
-  }
-
-  function closeInviteUser() {
-    if (inviteSaving) return
-    setInviteOpen(false)
-    setInviteError('')
-  }
-
-  function updateInviteForm(field, value) {
-    setInviteForm((current) => ({ ...current, [field]: value }))
-    setInviteError('')
-  }
-
-  async function sendInvite() {
-    if (!isOwner) {
-      setInviteError('Only Owner can invite users.')
-      return
-    }
-
-    const cleanName = inviteForm.display_name.trim()
-    const cleanEmail = inviteForm.email.trim().toLowerCase()
-
-    if (!cleanName) {
-      setInviteError('请填写 Name。')
-      return
-    }
-
-    if (!cleanEmail || !cleanEmail.includes('@')) {
-      setInviteError('请填写正确的 Email。')
-      return
-    }
-
-    if (
-      ['technician', 'agent'].includes(inviteForm.role) &&
-      !inviteForm.location_id
-    ) {
-      setInviteError('Technician / Agent 必须选择 Stock Holder。')
-      return
-    }
-
-    setInviteSaving(true)
-    setInviteError('')
-
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        'invite-user',
-        {
-          body: {
-            display_name: cleanName,
-            email: cleanEmail,
-            role: inviteForm.role,
-            location_id:
-              ['technician', 'agent'].includes(inviteForm.role)
-                ? inviteForm.location_id
-                : null,
-          },
-        }
-      )
-
-      if (error) throw error
-      if (!data?.ok) {
-        throw new Error(data?.error || 'Invite failed')
-      }
-
-      setInviteOpen(false)
-      showToast(`Invitation sent to ${cleanEmail}`)
-      await loadAppData()
-    } catch (error) {
-      console.error(error)
-      setInviteError(
-        error?.message ||
-          'Invite 失败。请确认 Edge Function 已 Deploy。'
-      )
-    } finally {
-      setInviteSaving(false)
-    }
-  }
-
   function openPasswordChange() {
     setPasswordForm({ password: '', confirm: '' })
     setPasswordError('')
@@ -1885,28 +1563,6 @@ function App() {
 
     setPasswordSaving(true)
     setPasswordError('')
-
-    let currentSession = null
-
-    try {
-      const current = await supabase.auth.getSession()
-      currentSession = current.data?.session || null
-
-      if (!currentSession && inviteLanding) {
-        const restored = await establishAuthSessionFromUrl()
-        currentSession = restored.session
-      }
-    } catch (error) {
-      console.error(error)
-    }
-
-    if (!currentSession) {
-      setPasswordError(
-        'Invitation session is missing or expired. Ask the Owner to Resend Invite.'
-      )
-      setPasswordSaving(false)
-      return
-    }
 
     const { error } = await supabase.auth.updateUser({
       password: passwordForm.password,
@@ -3255,7 +2911,6 @@ function App() {
               formatRole={formatRole}
               locationById={locationById}
               openUserAccess={openUserAccess}
-              openInviteUser={openInviteUser}
             />
           )}
 
@@ -3527,21 +3182,6 @@ function App() {
           updateForm={updateAccessForm}
           close={closeUserAccess}
           save={saveUserAccess}
-          resendInvite={resendUserInvite}
-          deleteUser={deleteUserAccount}
-          isCurrentUser={accessUser.user_id === session?.user?.id}
-        />
-      )}
-
-      {inviteOpen && (
-        <InviteUserModal
-          form={inviteForm}
-          locations={locations}
-          saving={inviteSaving}
-          error={inviteError}
-          updateForm={updateInviteForm}
-          close={closeInviteUser}
-          save={sendInvite}
         />
       )}
 
@@ -3577,7 +3217,6 @@ function App() {
           error={passwordError}
           close={closePasswordChange}
           save={savePasswordChange}
-          inviteLanding={inviteLanding}
         />
       )}
 
@@ -6699,7 +6338,6 @@ function UserAccessPage({
   formatRole,
   locationById,
   openUserAccess,
-  openInviteUser,
 }) {
   return (
     <div className="page-stack fade-in">
@@ -6708,15 +6346,10 @@ function UserAccessPage({
           <p className="kicker">OWNER CONTROL</p>
           <h2>User Access</h2>
           <p>
-            Invite staff directly from SVR Inventory, then control their
-            role and linked stock location here.
+            Create login accounts in Supabase Authentication first, then
+            manage each user's role, linked stock holder and active status here.
           </p>
         </div>
-
-        <button className="primary-button invite-user-button" onClick={openInviteUser}>
-          <UserPlus size={16} />
-          Add User
-        </button>
       </section>
 
       <section className="access-role-guide">
@@ -6772,10 +6405,10 @@ function UserAccessPage({
       <section className="surface-card access-note">
         <ShieldCheck size={20} />
         <div>
-          <strong>Secure invitation flow</strong>
+          <strong>Internal account management</strong>
           <span>
-            Add User sends an invitation email. The invited person opens the
-            link, sets their own password, then logs in with the role you assigned.
+            New login: Supabase → Authentication → Users → Add User.
+            Then refresh SVR Inventory and use Edit Access here to assign the correct role and stock holder.
           </span>
         </div>
       </section>
@@ -6783,117 +6416,6 @@ function UserAccessPage({
   )
 }
 
-
-function InviteUserModal({
-  form,
-  locations,
-  saving,
-  error,
-  updateForm,
-  close,
-  save,
-}) {
-  const needsLocation = ['technician', 'agent'].includes(form.role)
-
-  return (
-    <div className="transaction-backdrop" onClick={close}>
-      <section
-        className="mini-modal access-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mini-modal-head">
-          <div>
-            <p className="kicker">OWNER ONLY</p>
-            <h2>Add User</h2>
-            <p>Send an SVR Inventory invitation by email.</p>
-          </div>
-          <button className="icon-button" onClick={close}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="transaction-field">
-          <label>Name *</label>
-          <input
-            value={form.display_name}
-            onChange={(e) => updateForm('display_name', e.target.value)}
-            placeholder="e.g. Jie"
-          />
-        </div>
-
-        <div className="transaction-field">
-          <label>Email *</label>
-          <input
-            type="email"
-            autoCapitalize="none"
-            value={form.email}
-            onChange={(e) => updateForm('email', e.target.value)}
-            placeholder="name@example.com"
-          />
-        </div>
-
-        <div className="transaction-field">
-          <label>Role</label>
-          <select
-            value={form.role}
-            onChange={(e) => updateForm('role', e.target.value)}
-          >
-            <option value="viewer">Viewer</option>
-            <option value="technician">Technician</option>
-            <option value="agent">Agent</option>
-            <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
-          </select>
-        </div>
-
-        {needsLocation && (
-          <div className="transaction-field">
-            <label>Linked Stock Holder *</label>
-            <select
-              value={form.location_id}
-              onChange={(e) => updateForm('location_id', e.target.value)}
-            >
-              <option value="">Select stock holder</option>
-              {locations.map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div className="invite-security-note">
-          <ShieldCheck size={17} />
-          <span>
-            Password is never created by the Owner. The user sets it from
-            the secure invitation link.
-          </span>
-        </div>
-
-        {error && <div className="transaction-error">{error}</div>}
-
-        <div className="mini-modal-actions">
-          <button
-            className="secondary-button"
-            onClick={close}
-            disabled={saving}
-          >
-            Cancel
-          </button>
-          <button
-            className="primary-button"
-            onClick={save}
-            disabled={saving}
-          >
-            <UserPlus size={15} />
-            {saving ? 'Sending...' : 'Send Invitation'}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
 
 function PasswordModal({
   form,
@@ -6902,7 +6424,6 @@ function PasswordModal({
   error,
   close,
   save,
-  inviteLanding,
 }) {
   return (
     <div className="transaction-backdrop" onClick={close}>
@@ -6912,17 +6433,9 @@ function PasswordModal({
       >
         <div className="mini-modal-head">
           <div>
-            <p className="kicker">
-              {inviteLanding ? 'WELCOME TO SVR' : 'ACCOUNT SECURITY'}
-            </p>
-            <h2>
-              {inviteLanding ? 'Set Your Password' : 'Change Password'}
-            </h2>
-            <p>
-              {inviteLanding
-                ? 'Create your password to finish setting up the account.'
-                : 'Use at least 8 characters.'}
-            </p>
+            <p className="kicker">ACCOUNT SECURITY</p>
+            <h2>Change Password</h2>
+            <p>Use at least 8 characters.</p>
           </div>
           <button className="icon-button" onClick={close}>
             <X size={18} />
@@ -6992,9 +6505,6 @@ function UserAccessModal({
   updateForm,
   close,
   save,
-  resendInvite,
-  deleteUser,
-  isCurrentUser,
 }) {
   const needsLocation = ['technician', 'agent'].includes(form.role)
 
@@ -7066,38 +6576,12 @@ function UserAccessModal({
 
         {error && <div className="transaction-error">{error}</div>}
 
-        <div className="user-account-actions">
-          <button
-            className="secondary-button"
-            onClick={resendInvite}
-            disabled={saving || isCurrentUser}
-          >
-            <RefreshCw size={15} />
-            Resend Invite
-          </button>
-
-          <button
-            className="danger-button"
-            onClick={deleteUser}
-            disabled={saving || isCurrentUser}
-          >
-            <Trash2 size={15} />
-            Delete User
-          </button>
-        </div>
-
-        {isCurrentUser && (
-          <div className="access-self-note">
-            Your own Owner account cannot be resent or deleted here.
-          </div>
-        )}
-
         <div className="mini-modal-actions">
           <button className="secondary-button" onClick={close} disabled={saving}>
             Cancel
           </button>
           <button className="primary-button" onClick={save} disabled={saving}>
-            {saving ? 'Working...' : 'Save Access'}
+            {saving ? 'Saving...' : 'Save Access'}
           </button>
         </div>
       </section>
