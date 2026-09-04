@@ -377,11 +377,21 @@ function App() {
   const [passwordError, setPasswordError] = useState('')
   const [inviteLanding] = useState(() => {
     if (typeof window === 'undefined') return false
+
+    const url = new URL(window.location.href)
+    const hashParams = new URLSearchParams(
+      window.location.hash.replace(/^#/, '')
+    )
+    const type =
+      url.searchParams.get('type') ||
+      hashParams.get('type')
+
     return (
-      window.location.hash.includes('type=invite') ||
-      window.location.search.includes('type=invite') ||
-      window.location.hash.includes('type=recovery') ||
-      window.location.search.includes('type=recovery')
+      type === 'invite' ||
+      type === 'recovery' ||
+      url.searchParams.get('password_setup') === '1' ||
+      url.searchParams.has('code') ||
+      hashParams.has('access_token')
     )
   })
 
@@ -687,29 +697,127 @@ function App() {
     mobileActionsOpen,
   ])
 
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      if (data.session && inviteLanding) {
-        setPasswordOpen(true)
+  async function establishAuthSessionFromUrl() {
+    if (typeof window === 'undefined') {
+      const { data, error } = await supabase.auth.getSession()
+      return { session: data?.session || null, error }
+    }
+
+    const url = new URL(window.location.href)
+    const hashParams = new URLSearchParams(
+      window.location.hash.replace(/^#/, '')
+    )
+
+    const code = url.searchParams.get('code')
+    const tokenHash = url.searchParams.get('token_hash')
+    const type =
+      url.searchParams.get('type') ||
+      hashParams.get('type')
+    const accessToken = hashParams.get('access_token')
+    const refreshToken = hashParams.get('refresh_token')
+
+    // 1. Implicit invite / recovery flow.
+    if (accessToken && refreshToken) {
+      const result = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      })
+
+      if (!result.error && result.data?.session) {
+        return {
+          session: result.data.session,
+          error: null,
+        }
       }
+    }
+
+    // 2. PKCE flow.
+    if (code) {
+      const result = await supabase.auth.exchangeCodeForSession(code)
+
+      if (!result.error && result.data?.session) {
+        return {
+          session: result.data.session,
+          error: null,
+        }
+      }
+    }
+
+    // 3. Custom email template using token_hash.
+    if (
+      tokenHash &&
+      ['invite', 'recovery'].includes(type || '')
+    ) {
+      const result = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type,
+      })
+
+      if (!result.error && result.data?.session) {
+        return {
+          session: result.data.session,
+          error: null,
+        }
+      }
+    }
+
+    // 4. The Supabase client may already have processed the URL.
+    const current = await supabase.auth.getSession()
+
+    return {
+      session: current.data?.session || null,
+      error: current.error || null,
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function initializeAuth() {
+      const result = await establishAuthSessionFromUrl()
+
+      if (cancelled) return
+
+      setSession(result.session)
+
+      if (result.session && inviteLanding) {
+        setPasswordForm({ password: '', confirm: '' })
+        setPasswordError('')
+        setPasswordOpen(true)
+      } else if (!result.session && inviteLanding) {
+        setLoginError(
+          'This invitation link is expired or no longer valid. Ask the Owner to Resend Invite.'
+        )
+      }
+
       setAuthLoading(false)
-    })
+    }
+
+    initializeAuth()
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (cancelled) return
+
       setSession(newSession)
 
       if (
         newSession &&
-        (inviteLanding || event === 'PASSWORD_RECOVERY')
+        (inviteLanding ||
+          event === 'PASSWORD_RECOVERY' ||
+          event === 'SIGNED_IN')
       ) {
+        setPasswordForm({ password: '', confirm: '' })
+        setPasswordError('')
         setPasswordOpen(true)
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      cancelled = true
+      subscription.unsubscribe()
+    }
   }, [inviteLanding])
 
   useEffect(() => {
@@ -1449,6 +1557,96 @@ function App() {
   }
 
 
+  async function resendUserInvite() {
+    if (!accessUser || !isOwner || accessSaving) return
+
+    const ok = window.confirm(
+      `Resend invitation to ${accessUser.email}?\n\nUse this for an invited user who has NOT finished setting up their account.`
+    )
+
+    if (!ok) return
+
+    setAccessSaving(true)
+    setAccessError('')
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'invite-user',
+        {
+          body: {
+            action: 'resend_invite',
+            user_id: accessUser.user_id,
+          },
+        }
+      )
+
+      if (error) throw error
+      if (!data?.ok) {
+        throw new Error(data?.error || 'Unable to resend invitation')
+      }
+
+      setAccessUser(null)
+      showToast(`New invitation sent to ${data.email || accessUser.email}`)
+      await loadAppData()
+    } catch (error) {
+      console.error(error)
+      setAccessError(
+        error?.message ||
+          'Resend Invite failed. Please try again.'
+      )
+    } finally {
+      setAccessSaving(false)
+    }
+  }
+
+  async function deleteUserAccount() {
+    if (!accessUser || !isOwner || accessSaving) return
+
+    if (accessUser.user_id === session?.user?.id) {
+      setAccessError('You cannot delete your own Owner account.')
+      return
+    }
+
+    const ok = window.confirm(
+      `DELETE ${accessUser.display_name || accessUser.email}?\n\nThis permanently removes the login account. Use this for test / wrong / unused users. This cannot be undone.`
+    )
+
+    if (!ok) return
+
+    setAccessSaving(true)
+    setAccessError('')
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        'invite-user',
+        {
+          body: {
+            action: 'delete_user',
+            user_id: accessUser.user_id,
+          },
+        }
+      )
+
+      if (error) throw error
+      if (!data?.ok) {
+        throw new Error(data?.error || 'Unable to delete user')
+      }
+
+      setAccessUser(null)
+      showToast('User deleted')
+      await loadAppData()
+    } catch (error) {
+      console.error(error)
+      setAccessError(
+        error?.message ||
+          'Delete User failed. If this user already owns records, deactivate the account instead.'
+      )
+    } finally {
+      setAccessSaving(false)
+    }
+  }
+
+
   function openInventorySettings() {
     if (!isManagement) {
       showToast('Owner/Admin only')
@@ -1687,6 +1885,28 @@ function App() {
 
     setPasswordSaving(true)
     setPasswordError('')
+
+    let currentSession = null
+
+    try {
+      const current = await supabase.auth.getSession()
+      currentSession = current.data?.session || null
+
+      if (!currentSession && inviteLanding) {
+        const restored = await establishAuthSessionFromUrl()
+        currentSession = restored.session
+      }
+    } catch (error) {
+      console.error(error)
+    }
+
+    if (!currentSession) {
+      setPasswordError(
+        'Invitation session is missing or expired. Ask the Owner to Resend Invite.'
+      )
+      setPasswordSaving(false)
+      return
+    }
 
     const { error } = await supabase.auth.updateUser({
       password: passwordForm.password,
@@ -3307,6 +3527,9 @@ function App() {
           updateForm={updateAccessForm}
           close={closeUserAccess}
           save={saveUserAccess}
+          resendInvite={resendUserInvite}
+          deleteUser={deleteUserAccount}
+          isCurrentUser={accessUser.user_id === session?.user?.id}
         />
       )}
 
@@ -6769,6 +6992,9 @@ function UserAccessModal({
   updateForm,
   close,
   save,
+  resendInvite,
+  deleteUser,
+  isCurrentUser,
 }) {
   const needsLocation = ['technician', 'agent'].includes(form.role)
 
@@ -6840,12 +7066,38 @@ function UserAccessModal({
 
         {error && <div className="transaction-error">{error}</div>}
 
+        <div className="user-account-actions">
+          <button
+            className="secondary-button"
+            onClick={resendInvite}
+            disabled={saving || isCurrentUser}
+          >
+            <RefreshCw size={15} />
+            Resend Invite
+          </button>
+
+          <button
+            className="danger-button"
+            onClick={deleteUser}
+            disabled={saving || isCurrentUser}
+          >
+            <Trash2 size={15} />
+            Delete User
+          </button>
+        </div>
+
+        {isCurrentUser && (
+          <div className="access-self-note">
+            Your own Owner account cannot be resent or deleted here.
+          </div>
+        )}
+
         <div className="mini-modal-actions">
           <button className="secondary-button" onClick={close} disabled={saving}>
             Cancel
           </button>
           <button className="primary-button" onClick={save} disabled={saving}>
-            {saving ? 'Saving...' : 'Save Access'}
+            {saving ? 'Working...' : 'Save Access'}
           </button>
         </div>
       </section>
