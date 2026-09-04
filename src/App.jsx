@@ -373,12 +373,23 @@ function App() {
 
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [inventoryDetailItem, setInventoryDetailItem] = useState(null)
+  const [inventoryDetailMovements, setInventoryDetailMovements] = useState([])
+  const [inventoryDetailLoading, setInventoryDetailLoading] = useState(false)
+  const [inventoryDetailError, setInventoryDetailError] = useState('')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [activeTab])
+
+  useEffect(() => {
+    if (activeTab !== 'inventory' && inventoryDetailItem) {
+      setInventoryDetailItem(null)
+      setInventoryDetailError('')
+    }
+  }, [activeTab, inventoryDetailItem])
 
   const [actionMode, setActionMode] = useState(null)
   const [actionItems, setActionItems] = useState([
@@ -496,6 +507,11 @@ function App() {
   const [followupError, setFollowupError] = useState('')
 
   function closeTopOverlayForBack() {
+    if (inventoryDetailItem) {
+      setInventoryDetailItem(null)
+      setInventoryDetailError('')
+      return true
+    }
     if (passwordOpen) {
       setPasswordOpen(false)
       return true
@@ -647,6 +663,7 @@ function App() {
   }, [
     activeTab,
     operationsView,
+    inventoryDetailItem,
     passwordOpen,
     accessUser,
     productEditor,
@@ -967,6 +984,53 @@ function App() {
     }
 
     return movement.movement_type
+  }
+
+
+  async function openInventoryDetail(item) {
+    if (!item?.product_id) return
+
+    setInventoryDetailItem(item)
+    setInventoryDetailMovements([])
+    setInventoryDetailError('')
+    setInventoryDetailLoading(true)
+
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    const { data, error } = await supabase
+      .from('stock_movements')
+      .select('*')
+      .eq('product_id', item.product_id)
+      .order('created_at', { ascending: false })
+      .limit(500)
+
+    if (error) {
+      console.error(error)
+      const fallback = visibleMovements.filter(
+        (movement) => movement.product_id === item.product_id
+      )
+      setInventoryDetailMovements(fallback)
+      setInventoryDetailError(
+        'Unable to load the full history. Showing the recent activity already loaded in the app.'
+      )
+      setInventoryDetailLoading(false)
+      return
+    }
+
+    let nextMovements = data || []
+
+    if (!isManagement && profile?.location_id) {
+      nextMovements = nextMovements.filter(
+        (movement) =>
+          movement.from_location_id === profile.location_id ||
+          movement.to_location_id === profile.location_id
+      )
+    }
+
+    setInventoryDetailMovements(nextMovements)
+    setInventoryDetailLoading(false)
   }
 
 
@@ -2792,16 +2856,37 @@ function App() {
           )}
 
           {activeTab === 'inventory' && (
-            <InventoryPage
-              inventory={filteredInventory}
-              search={search}
-              setSearch={setSearch}
-              categoryFilter={categoryFilter}
-              setCategoryFilter={setCategoryFilter}
-              productDisplayName={productDisplayName}
-              canAddProduct={isManagement}
-              openAddProduct={() => openProductEditor(null)}
-            />
+            inventoryDetailItem ? (
+              <InventoryItemDetail
+                key={inventoryDetailItem.product_id}
+                item={inventoryDetailItem}
+                movements={inventoryDetailMovements}
+                loading={inventoryDetailLoading}
+                error={inventoryDetailError}
+                locationStock={locationStock}
+                locations={allLocations}
+                profile={profile}
+                isManagement={isManagement}
+                productDisplayName={productDisplayName}
+                locationById={locationById}
+                profileByUserId={profileByUserId}
+                movementSubtitle={movementSubtitle}
+                formatDate={formatDate}
+                close={() => setInventoryDetailItem(null)}
+              />
+            ) : (
+              <InventoryPage
+                inventory={filteredInventory}
+                search={search}
+                setSearch={setSearch}
+                categoryFilter={categoryFilter}
+                setCategoryFilter={setCategoryFilter}
+                productDisplayName={productDisplayName}
+                canAddProduct={isManagement}
+                openAddProduct={() => openProductEditor(null)}
+                openItem={openInventoryDetail}
+              />
+            )
           )}
 
           {activeTab === 'operations' && (
@@ -5655,6 +5740,7 @@ function InventoryPage({
   productDisplayName,
   canAddProduct,
   openAddProduct,
+  openItem,
 }) {
   return (
     <div className="page-stack fade-in">
@@ -5702,7 +5788,13 @@ function InventoryPage({
 
       <section className="inventory-grid">
         {inventory.map((item) => (
-          <article className="inventory-card" key={item.product_id}>
+          <button
+            type="button"
+            className="inventory-card inventory-card-button"
+            key={item.product_id}
+            onClick={() => openItem(item)}
+            aria-label={`Open ${productDisplayName(item)} stock history`}
+          >
             <div className="inventory-card-top">
               <div>
                 <span className="category-label">
@@ -5733,7 +5825,12 @@ function InventoryPage({
                 <strong>{item.minimum_stock}</strong>
               </div>
             </div>
-          </article>
+
+            <div className="inventory-card-view">
+              <span><History size={13} /> View item trace</span>
+              <ChevronRight size={15} />
+            </div>
+          </button>
         ))}
 
         {inventory.length === 0 && (
@@ -5742,6 +5839,232 @@ function InventoryPage({
               title="Nothing found"
               text="Try another search or filter."
             />
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+
+function InventoryItemDetail({
+  item,
+  movements,
+  loading,
+  error,
+  locationStock,
+  locations,
+  profile,
+  isManagement,
+  productDisplayName,
+  locationById,
+  profileByUserId,
+  movementSubtitle,
+  formatDate,
+  close,
+}) {
+  const [filter, setFilter] = useState('all')
+
+  const allowedLocationId = !isManagement ? profile?.location_id : null
+
+  const stockRows = locationStock
+    .filter((row) => row.product_id === item.product_id)
+    .filter((row) => !allowedLocationId || row.location_id === allowedLocationId)
+    .filter((row) => Number(row.quantity || 0) !== 0)
+    .sort((a, b) => Number(b.quantity || 0) - Number(a.quantity || 0))
+
+  const filterMatch = (movement) => {
+    if (filter === 'all') return true
+    if (filter === 'in') {
+      return ['stock_in', 'return'].includes(movement.movement_type)
+    }
+    if (filter === 'transfer') return movement.movement_type === 'transfer'
+    if (filter === 'out') return movement.movement_type === 'stock_out'
+    if (filter === 'adjustment') {
+      return ['adjustment_in', 'adjustment_out'].includes(movement.movement_type)
+    }
+    return true
+  }
+
+  const filteredMovements = movements.filter(filterMatch)
+
+  const movementLabel = (type) => {
+    if (type === 'stock_in') return 'Stock In'
+    if (type === 'transfer') return 'Transfer'
+    if (type === 'stock_out') return 'Stock Out'
+    if (type === 'return') return 'Return'
+    if (type === 'adjustment_in') return 'Adjustment In'
+    if (type === 'adjustment_out') return 'Adjustment Out'
+    return String(type || 'Movement').replaceAll('_', ' ')
+  }
+
+  const movementTone = (type) => {
+    if (['stock_in', 'return', 'adjustment_in'].includes(type)) return 'positive'
+    if (type === 'transfer') return 'transfer'
+    return 'negative'
+  }
+
+  const quantityPrefix = (type) => {
+    if (['stock_in', 'return', 'adjustment_in'].includes(type)) return '+'
+    if (['stock_out', 'adjustment_out'].includes(type)) return '-'
+    return ''
+  }
+
+  return (
+    <div className="page-stack fade-in inventory-detail-page">
+      <section className="inventory-detail-nav">
+        <button type="button" className="detail-back-button" onClick={close}>
+          <ChevronLeft size={18} /> Inventory
+        </button>
+        <span className="detail-history-count">
+          <History size={13} /> {movements.length} movements
+        </span>
+      </section>
+
+      <section className="surface-card inventory-detail-hero">
+        <div className="inventory-detail-title-row">
+          <div>
+            <span className="category-label">
+              {item.category === 'smart_lock' ? 'SMART LOCK' : 'LOCK BODY'}
+            </span>
+            <h2>{productDisplayName(item)}</h2>
+            <p>Live stock position and item movement history.</p>
+          </div>
+          <div className="available-chip detail-available-chip">
+            <span>Available</span>
+            <strong>{item.available_stock}</strong>
+          </div>
+        </div>
+
+        <div className="inventory-detail-stats">
+          <div><span>Physical</span><strong>{item.physical_stock}</strong></div>
+          <div><span>Reserved</span><strong>{item.reserved_stock}</strong></div>
+          <div><span>Minimum</span><strong>{item.minimum_stock}</strong></div>
+        </div>
+      </section>
+
+      <section className="surface-card item-location-card">
+        <div className="section-head compact-head">
+          <div>
+            <p className="kicker">CURRENT LOCATION</p>
+            <h3>Where the stock is now</h3>
+          </div>
+          <Warehouse size={18} />
+        </div>
+
+        <div className="item-location-list">
+          {stockRows.map((row) => {
+            const location =
+              locations.find((entry) => entry.id === row.location_id) ||
+              locationById(row.location_id)
+            return (
+              <div className="item-location-row" key={row.location_id}>
+                <div>
+                  <strong>{location?.name || 'Unknown Location'}</strong>
+                  <span>{location?.location_type?.replaceAll('_', ' ') || 'Stock Holder'}</span>
+                </div>
+                <b>{Number(row.quantity || 0)}</b>
+              </div>
+            )
+          })}
+
+          {stockRows.length === 0 && (
+            <EmptyState
+              title="No physical stock"
+              text="There is currently no physical unit at the locations you can view."
+            />
+          )}
+        </div>
+      </section>
+
+      <section className="surface-card item-trace-card">
+        <div className="section-head compact-head item-trace-head">
+          <div>
+            <p className="kicker">ITEM TRACE</p>
+            <h3>Movement History</h3>
+          </div>
+          <span>{filteredMovements.length} shown</span>
+        </div>
+
+        <div className="item-trace-filters" role="tablist" aria-label="Movement filter">
+          {[
+            ['all', 'All'],
+            ['in', 'In / Return'],
+            ['transfer', 'Transfer'],
+            ['out', 'Out'],
+            ['adjustment', 'Adjustment'],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              className={filter === value ? 'active' : ''}
+              onClick={() => setFilter(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {error && <div className="item-trace-warning">{error}</div>}
+
+        {loading ? (
+          <div className="item-trace-loading">
+            <RefreshCw size={17} className="spin" /> Loading item history…
+          </div>
+        ) : (
+          <div className="item-trace-list">
+            {filteredMovements.map((movement) => {
+              const actor = profileByUserId(movement.created_by)
+              const tone = movementTone(movement.movement_type)
+              const prefix = quantityPrefix(movement.movement_type)
+
+              return (
+                <article className="item-trace-row" key={movement.id}>
+                  <div className={`item-trace-icon ${tone}`}>
+                    {movement.movement_type === 'transfer' ? (
+                      <ArrowRightLeft size={16} />
+                    ) : movement.movement_type === 'stock_out' ||
+                      movement.movement_type === 'adjustment_out' ? (
+                      <PackageMinus size={16} />
+                    ) : (
+                      <ArrowDownToLine size={16} />
+                    )}
+                  </div>
+
+                  <div className="item-trace-copy">
+                    <div className="item-trace-topline">
+                      <strong>{movementLabel(movement.movement_type)}</strong>
+                      <b className={tone}>{prefix}{movement.quantity}</b>
+                    </div>
+                    <p>{movementSubtitle(movement)}</p>
+
+                    {(movement.customer_name || movement.reference_no || movement.remark) && (
+                      <div className="item-trace-meta">
+                        {movement.customer_name && <span>Customer: {movement.customer_name}</span>}
+                        {movement.reference_no && <span>Ref: {movement.reference_no}</span>}
+                        {movement.remark && <span>{movement.remark}</span>}
+                      </div>
+                    )}
+
+                    <div className="item-trace-footer">
+                      <time>{formatDate(movement.created_at)}</time>
+                      {actor && (
+                        <span>By {actor.display_name || actor.email}</span>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+
+            {filteredMovements.length === 0 && (
+              <EmptyState
+                title="No matching movement"
+                text={movements.length === 0
+                  ? 'This item does not have a stock movement yet.'
+                  : 'Try another movement filter.'}
+              />
+            )}
           </div>
         )}
       </section>
