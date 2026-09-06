@@ -4798,7 +4798,24 @@ function BookingCardV6({
       {booking.remark && <p className="ops-remark">{booking.remark}</p>}
 
       <div className="ops-card-actions">
-        {canManage && <button className="secondary-button" onClick={() => openEditBooking(booking, productTbc)}>{productTbc ? 'Confirm Product' : 'Edit'}</button>}
+        {canManage && (
+          <button
+            className="secondary-button"
+            onClick={() => openEditBooking(booking)}
+          >
+            Edit
+          </button>
+        )}
+
+        {canManage && productTbc && (
+          <button
+            className="primary-button"
+            onClick={() => openEditBooking(booking, true)}
+          >
+            Confirm Product
+          </button>
+        )}
+
         {canManage && !productTbc && booking.installer_location_id && booking.handover_status !== 'handed_over' && <button className="secondary-button" onClick={() => openHandover(booking)}>Hand Over</button>}
         {canCompleteJobs && !productTbc && <button className="primary-button" onClick={() => openCompleteInstallation(booking)}>Complete Install</button>}
         {canManage && <button className="icon-button danger-small" title="Cancel booking" onClick={() => cancelReservation(booking)}><XCircle size={16} /></button>}
@@ -5118,7 +5135,7 @@ function BookingV6Modal({ editor, form, items, products, locations, saving, erro
   return (
     <div className="transaction-backdrop" onClick={close}>
       <section className="transaction-modal booking-v6-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="transaction-modal-head"><div><p className="kicker">{editor.type === 'new' ? 'NEW BOOKING' : 'EDIT BOOKING'}</p><h2>{editor.type === 'new' ? 'Create Booking' : 'Update Booking'}</h2><p>It is okay if product or installation date is still TBC.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
+        <div className="transaction-modal-head"><div><p className="kicker">{editor.type === 'new' ? 'NEW BOOKING' : 'EDIT BOOKING'}</p><h2>{editor.type === 'new' ? 'Create Booking' : 'Update Booking'}</h2><p>{editor.type === 'edit' && form.booking_type === 'promotion_only' ? 'You can update customer, address, timing, payment or notes without confirming a product.' : 'It is okay if product or installation date is still TBC.'}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
         <div className="transaction-scroll">
           <div className="transaction-two-col">
             <div className="transaction-field"><label>Customer Name *</label><input value={form.customer_name} onChange={(e) => updateForm('customer_name', e.target.value)} /></div>

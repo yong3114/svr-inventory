@@ -8446,3 +8446,91 @@ body {
 .job-technician-note strong {
   margin-right: 3px;
 }
+
+
+/* =========================================================
+   V6.3.1 — Google Places mobile overflow fix
+   Keep PlaceAutocompleteElement inside Create/Edit Booking.
+   ========================================================= */
+
+.google-place-control,
+.google-place-host,
+.google-place-host gmp-place-autocomplete {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.google-place-control {
+  width: 100% !important;
+  overflow: visible !important;
+}
+
+.google-place-host {
+  width: 100% !important;
+  overflow: visible !important;
+}
+
+.google-place-host gmp-place-autocomplete {
+  display: block !important;
+  width: 100% !important;
+}
+
+/* Address field itself must be allowed to shrink inside the modal/grid. */
+.transaction-field.address-field {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* Defensive fix for all Booking modal children on narrow screens. */
+.booking-v6-modal,
+.booking-v6-modal .transaction-scroll,
+.booking-v6-modal .transaction-field,
+.booking-v6-modal .google-place-control,
+.booking-v6-modal .google-place-host {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 720px) {
+  .booking-v6-modal {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .booking-v6-modal .transaction-scroll {
+    width: 100% !important;
+    overflow-x: hidden !important;
+  }
+
+  .booking-v6-modal .address-field {
+    padding: 11px !important;
+    overflow: visible !important;
+  }
+
+  .booking-v6-modal .google-place-control,
+  .booking-v6-modal .google-place-host,
+  .booking-v6-modal .google-place-host gmp-place-autocomplete {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /*
+   * Google Maps PlaceAutocompleteElement can carry an intrinsic/default
+   * inline size. contain:inline-size prevents it from forcing the parent
+   * wider than the phone while keeping the suggestion popup functional.
+   */
+  .booking-v6-modal .google-place-host {
+    contain: inline-size;
+  }
+}
+
+@media (max-width: 380px) {
+  .booking-v6-modal .address-field {
+    padding: 9px !important;
+  }
+}
