@@ -377,6 +377,16 @@ function App() {
   const [inventoryDetailMovements, setInventoryDetailMovements] = useState([])
   const [inventoryDetailLoading, setInventoryDetailLoading] = useState(false)
   const [inventoryDetailError, setInventoryDetailError] = useState('')
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false)
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [adjustStockItem, setAdjustStockItem] = useState(null)
+  const [adjustStockForm, setAdjustStockForm] = useState({
+    location_id: '',
+    actual_quantity: 0,
+    reason: '',
+  })
+  const [adjustStockSaving, setAdjustStockSaving] = useState(false)
+  const [adjustStockError, setAdjustStockError] = useState('')
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false)
 
   useEffect(() => {
@@ -466,6 +476,7 @@ function App() {
     installation_time: '',
     estimated_installation: '',
     installer_location_id: '',
+    technician_note: '',
     remark: '',
   })
   const [bookingItems, setBookingItems] = useState([{ product_id: '', quantity: 1 }])
@@ -507,6 +518,16 @@ function App() {
   const [followupError, setFollowupError] = useState('')
 
   function closeTopOverlayForBack() {
+    if (adjustStockItem) {
+      setAdjustStockItem(null)
+      setAdjustStockError('')
+      return true
+    }
+    if (globalSearchOpen) {
+      setGlobalSearchOpen(false)
+      setGlobalSearch('')
+      return true
+    }
     if (inventoryDetailItem) {
       setInventoryDetailItem(null)
       setInventoryDetailError('')
@@ -663,6 +684,8 @@ function App() {
   }, [
     activeTab,
     operationsView,
+    adjustStockItem,
+    globalSearchOpen,
     inventoryDetailItem,
     passwordOpen,
     accessUser,
@@ -1033,6 +1056,162 @@ function App() {
     setInventoryDetailLoading(false)
   }
 
+
+  function openGlobalSearch() {
+    setGlobalSearch('')
+    setGlobalSearchOpen(true)
+  }
+
+  function openAdjustStock(item, locationId = '') {
+    if (!isManagement) {
+      showToast('Owner/Admin permission required')
+      return
+    }
+
+    const defaultLocation =
+      (locationId && locationById(locationId)) ||
+      locations.find((location) => location.code === 'SVR-JB') ||
+      locations.find((location) => location.location_type === 'warehouse') ||
+      locations[0]
+
+    const selectedId = defaultLocation?.id || locationId || ''
+    const currentQty = Number(
+      locationStock.find(
+        (row) =>
+          row.product_id === item.product_id &&
+          row.location_id === selectedId
+      )?.quantity || 0
+    )
+
+    setAdjustStockItem(item)
+    setAdjustStockForm({
+      location_id: selectedId,
+      actual_quantity: currentQty,
+      reason: '',
+    })
+    setAdjustStockError('')
+  }
+
+  function changeAdjustStockLocation(locationId) {
+    if (!adjustStockItem) return
+
+    const currentQty = Number(
+      locationStock.find(
+        (row) =>
+          row.product_id === adjustStockItem.product_id &&
+          row.location_id === locationId
+      )?.quantity || 0
+    )
+
+    setAdjustStockForm((current) => ({
+      ...current,
+      location_id: locationId,
+      actual_quantity: currentQty,
+    }))
+    setAdjustStockError('')
+  }
+
+  async function saveAdjustStock() {
+    if (!adjustStockItem) return
+    if (!adjustStockForm.location_id) {
+      setAdjustStockError('Please select a Stock Holder.')
+      return
+    }
+    if (!adjustStockForm.reason.trim()) {
+      setAdjustStockError('Please enter the reason for this adjustment.')
+      return
+    }
+
+    const actual = Math.max(
+      0,
+      Math.floor(Number(adjustStockForm.actual_quantity) || 0)
+    )
+
+    setAdjustStockSaving(true)
+    setAdjustStockError('')
+
+    const { data: difference, error } = await supabase.rpc(
+      'adjust_stock_item_v63',
+      {
+        p_product_id: adjustStockItem.product_id,
+        p_location_id: adjustStockForm.location_id,
+        p_actual_quantity: actual,
+        p_reason: adjustStockForm.reason.trim(),
+      }
+    )
+
+    if (error) {
+      console.error(error)
+      setAdjustStockError(error.message || 'Unable to adjust stock.')
+      setAdjustStockSaving(false)
+      return
+    }
+
+    const previous = Number(
+      locationStock.find(
+        (row) =>
+          row.product_id === adjustStockItem.product_id &&
+          row.location_id === adjustStockForm.location_id
+      )?.quantity || 0
+    )
+    const delta = Number(difference ?? actual - previous)
+    const nextDetailItem = {
+      ...adjustStockItem,
+      physical_stock: Number(adjustStockItem.physical_stock || 0) + delta,
+      available_stock: Number(adjustStockItem.available_stock || 0) + delta,
+    }
+
+    setAdjustStockItem(null)
+    setAdjustStockSaving(false)
+    showToast(delta === 0 ? 'Stock already matches actual quantity' : 'Stock adjusted successfully')
+    await loadAppData()
+
+    if (inventoryDetailItem?.product_id === nextDetailItem.product_id) {
+      await openInventoryDetail(nextDetailItem)
+    }
+  }
+
+  async function acknowledgeBookingNote(booking) {
+    if (!booking?.id || !booking.technician_note) return
+
+    const { error } = await supabase.rpc('acknowledge_booking_note_v63', {
+      p_reservation_id: booking.id,
+    })
+
+    if (error) {
+      console.error(error)
+      showToast(error.message || 'Unable to acknowledge note')
+      return
+    }
+
+    showToast('Important Note acknowledged')
+    await loadAppData()
+  }
+
+  function openSearchBooking(booking) {
+    setGlobalSearchOpen(false)
+    setGlobalSearch('')
+    setActiveTab('operations')
+    if (isManagement) {
+      openEditBooking(booking)
+    } else {
+      setOperationsView('today')
+    }
+  }
+
+  function openSearchJob(job) {
+    setGlobalSearchOpen(false)
+    setGlobalSearch('')
+    setJobFilter('all')
+    setActiveTab('jobs')
+  }
+
+  async function openSearchProduct(item) {
+    setGlobalSearchOpen(false)
+    setGlobalSearch('')
+    setActiveTab('inventory')
+    await openInventoryDetail(item)
+  }
 
   function openDirectJob() {
     if (!canCompleteJobs) {
@@ -1672,7 +1851,7 @@ function App() {
       booking_type: 'product_confirmed', promotion_name: '', selling_price: '',
       deposit_amount: '', payment_status: 'deposit_paid', schedule_type: 'tbc',
       installation_date: '', installation_time: '', estimated_installation: '',
-      installer_location_id: '', remark: '',
+      installer_location_id: '', technician_note: '', remark: '',
     })
     setBookingItems([{ product_id: '', quantity: 1 }])
     setBookingError('')
@@ -1701,6 +1880,7 @@ function App() {
       installation_time: booking.installation_time ? String(booking.installation_time).slice(0, 5) : '',
       estimated_installation: booking.estimated_installation || '',
       installer_location_id: booking.installer_location_id || '',
+      technician_note: booking.technician_note || '',
       remark: booking.remark || '',
     })
     const items = (booking.reservation_items || []).map((item) => ({
@@ -1780,15 +1960,16 @@ function App() {
       p_installation_time: bookingForm.schedule_type === 'exact' ? (bookingForm.installation_time || null) : null,
       p_estimated_installation: bookingForm.schedule_type === 'estimated' ? (bookingForm.estimated_installation.trim() || null) : null,
       p_installer_location_id: bookingForm.installer_location_id || null,
+      p_technician_note: bookingForm.technician_note.trim() || null,
       p_remark: bookingForm.remark.trim() || null,
       p_items: cleanItems,
     }
 
     let result
     if (bookingEditor.type === 'new') {
-      result = await supabase.rpc('create_booking_v61', params)
+      result = await supabase.rpc('create_booking_v63', params)
     } else {
-      result = await supabase.rpc('update_booking_v61', {
+      result = await supabase.rpc('update_booking_v63', {
         p_reservation_id: bookingEditor.booking.id,
         ...params,
       })
@@ -2793,6 +2974,15 @@ function App() {
 
           <div className="header-actions">
             <button
+              className="icon-button header-search-button"
+              onClick={openGlobalSearch}
+              title="Search everything"
+              aria-label="Search everything"
+            >
+              <Search size={18} />
+            </button>
+
+            <button
               className="icon-button"
               onClick={loadAppData}
               title="Refresh"
@@ -2852,6 +3042,9 @@ function App() {
               setActiveTab={setActiveTab}
               setMobileActionsOpen={setMobileActionsOpen}
               openStockCount={openStockCount}
+              currentRole={currentRole}
+              profile={profile}
+              locationById={locationById}
             />
           )}
 
@@ -2872,6 +3065,7 @@ function App() {
                 profileByUserId={profileByUserId}
                 movementSubtitle={movementSubtitle}
                 formatDate={formatDate}
+                openAdjustStock={openAdjustStock}
                 close={() => setInventoryDetailItem(null)}
               />
             ) : (
@@ -2910,6 +3104,8 @@ function App() {
               openFollowup={openFollowup}
               canManage={isManagement}
               canCompleteJobs={canCompleteJobs}
+              acknowledgeBookingNote={acknowledgeBookingNote}
+              profileByUserId={profileByUserId}
             />
           )}
 
@@ -3069,7 +3265,10 @@ function App() {
           {(isManagement || isTechnician) ? (
             <button
               className={activeTab === 'operations' ? 'active' : ''}
-              onClick={() => setActiveTab('operations')}
+              onClick={() => {
+                if (isTechnician) setOperationsView('today')
+                setActiveTab('operations')
+              }}
             >
               <CalendarDays size={19} />
               <span>Ops</span>
@@ -3267,6 +3466,41 @@ function App() {
           updateForm={updateAccessForm}
           close={closeUserAccess}
           save={saveUserAccess}
+        />
+      )}
+
+      {globalSearchOpen && (
+        <GlobalSearchModal
+          query={globalSearch}
+          setQuery={setGlobalSearch}
+          reservations={visibleReservations}
+          jobs={visibleJobs}
+          inventory={visibleInventory}
+          productById={productById}
+          productDisplayName={productDisplayName}
+          close={() => {
+            setGlobalSearchOpen(false)
+            setGlobalSearch('')
+          }}
+          openBooking={openSearchBooking}
+          openJob={openSearchJob}
+          openProduct={openSearchProduct}
+        />
+      )}
+
+      {adjustStockItem && (
+        <AdjustStockModal
+          item={adjustStockItem}
+          form={adjustStockForm}
+          setForm={setAdjustStockForm}
+          locations={locations}
+          locationStock={locationStock}
+          productDisplayName={productDisplayName}
+          saving={adjustStockSaving}
+          error={adjustStockError}
+          changeLocation={changeAdjustStockLocation}
+          close={() => !adjustStockSaving && setAdjustStockItem(null)}
+          save={saveAdjustStock}
         />
       )}
 
@@ -3750,6 +3984,8 @@ function OperationsPage({
   openFollowup,
   canManage,
   canCompleteJobs,
+  acknowledgeBookingNote,
+  profileByUserId,
 }) {
   const activeBookings = bookings.filter((item) => item.status === 'reserved')
   const promotion = activeBookings.filter((item) => item.booking_type === 'promotion_only')
@@ -3776,6 +4012,10 @@ function OperationsPage({
       openHandover={openHandover}
       openCompleteInstallation={openCompleteInstallation}
       cancelReservation={cancelReservation}
+      currentRole={currentRole}
+      profile={profile}
+      acknowledgeBookingNote={acknowledgeBookingNote}
+      profileByUserId={profileByUserId}
     />
   )
 
@@ -3802,13 +4042,21 @@ function OperationsPage({
       </section>
 
       <div className="status-tabs operations-tabs">
-        {[
-          ['board', 'Board'],
-          ['calendar', 'Calendar'],
-          ['today', `Today ${todayBookings.length + todayFollowups.length}`],
-          ['schedule', `Scheduled ${scheduled.length}`],
-          ['pending', `Pending Settle ${pendingFollowups.length}`],
-        ].map(([id, label]) => (
+        {(currentRole === 'technician'
+          ? [
+              ['today', `Today ${todayBookings.length + todayFollowups.length}`],
+              ['calendar', 'Calendar'],
+              ['pending', `Pending ${pendingFollowups.length}`],
+              ['board', 'Board'],
+              ['schedule', `Scheduled ${scheduled.length}`],
+            ]
+          : [
+              ['board', 'Board'],
+              ['calendar', 'Calendar'],
+              ['today', `Today ${todayBookings.length + todayFollowups.length}`],
+              ['schedule', `Scheduled ${scheduled.length}`],
+              ['pending', `Pending Settle ${pendingFollowups.length}`],
+            ]).map(([id, label]) => (
           <button key={id} className={operationsView === id ? 'active' : ''} onClick={() => setOperationsView(id)}>{label}</button>
         ))}
       </div>
@@ -3865,8 +4113,20 @@ function OperationsPage({
       )}
 
       {operationsView === 'today' && (
-        <section className="ops-list">
-          {todayBookings.map(bookingCard)}
+        <section className="ops-list today-mode-list">
+          {currentRole === 'technician' && (
+            <div className="surface-card today-mode-head">
+              <div>
+                <p className="kicker">TECHNICIAN TODAY MODE</p>
+                <h3>My schedule • {localDate}</h3>
+                <span>Call, WhatsApp, Maps, Important Note and Complete Installation — all here.</span>
+              </div>
+              <strong>{todayBookings.length + todayFollowups.length}</strong>
+            </div>
+          )}
+          {[...todayBookings]
+            .sort((a, b) => String(a.installation_time || '').localeCompare(String(b.installation_time || '')))
+            .map(bookingCard)}
           {todayFollowups.map((follow) => {
             const job = jobs.find((item) => item.id === follow.job_id)
             return <FollowupCardV6 key={follow.id} followup={follow} job={job} locationById={locationById} openFollowup={openFollowup} canManage={canManage} currentRole={currentRole} profile={profile} />
@@ -4366,6 +4626,9 @@ function CalendarEventV61({
           </small>
         )}
         {expanded && tech && <small>{tech.name}</small>}
+        {expanded && event.type === 'installation' && event.record?.technician_note && (
+          <small className="calendar-important-note">⚠ {event.record.technician_note}</small>
+        )}
       </button>
 
       {mapUrl && (
@@ -4403,6 +4666,10 @@ function BookingCardV6({
   openHandover,
   openCompleteInstallation,
   cancelReservation,
+  currentRole,
+  profile,
+  acknowledgeBookingNote,
+  profileByUserId,
 }) {
   const installer = locationById(booking.installer_location_id)
   const productTbc = booking.booking_type === 'promotion_only'
@@ -4500,6 +4767,34 @@ function BookingCardV6({
         </div>
       )}
 
+      {booking.technician_note && (
+        <div className={booking.technician_note_acknowledged_at ? 'technician-important-note acknowledged' : 'technician-important-note'}>
+          <div className="technician-important-note-head">
+            <span><AlertTriangle size={14} /> IMPORTANT NOTE FOR TECHNICIAN</span>
+            {booking.technician_note_acknowledged_at && (
+              <small><CheckCircle2 size={13} /> Acknowledged</small>
+            )}
+          </div>
+          <p>{booking.technician_note}</p>
+          <div className="technician-important-note-footer">
+            {booking.technician_note_acknowledged_at ? (
+              <span>
+                Seen {new Date(booking.technician_note_acknowledged_at).toLocaleString('en-MY', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                {profileByUserId?.(booking.technician_note_acknowledged_by)?.display_name
+                  ? ` • ${profileByUserId(booking.technician_note_acknowledged_by).display_name}`
+                  : ''}
+              </span>
+            ) : currentRole === 'technician' && profile?.location_id === booking.installer_location_id ? (
+              <button type="button" onClick={() => acknowledgeBookingNote(booking)}>
+                <CheckCircle2 size={14} /> Acknowledge
+              </button>
+            ) : (
+              <span>Waiting technician acknowledgement</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {booking.remark && <p className="ops-remark">{booking.remark}</p>}
 
       <div className="ops-card-actions">
@@ -4522,6 +4817,9 @@ function FollowupCardV6({ followup, job, locationById, openFollowup, canManage, 
         <div className="followup-title"><div><span>PENDING SETTLE</span><h3>{job?.customer_name || job?.job_no || 'Installation Job'}</h3></div><strong>{followup.status}</strong></div>
         <p>{followup.issue}</p>
         <div className="followup-meta"><span><UserRound size={13} /> {tech?.name || 'Technician TBC'}</span><span><CalendarDays size={13} /> {followup.scheduled_date || 'Follow-up TBC'} {followup.scheduled_time ? String(followup.scheduled_time).slice(0,5) : ''}</span></div>
+        {job?.technician_note && (
+          <div className="followup-important-note">⚠ {job.technician_note}</div>
+        )}
         {followup.remark && <small>{followup.remark}</small>}
         <div className="followup-actions">
           {canManage && <button className="secondary-button" onClick={() => openFollowup(followup, 'schedule')}>Schedule / Edit</button>}
@@ -4529,6 +4827,289 @@ function FollowupCardV6({ followup, job, locationById, openFollowup, canManage, 
         </div>
       </div>
     </article>
+  )
+}
+
+
+function GlobalSearchModal({
+  query,
+  setQuery,
+  reservations,
+  jobs,
+  inventory,
+  productById,
+  productDisplayName,
+  close,
+  openBooking,
+  openJob,
+  openProduct,
+}) {
+  const normalized = query.trim().toLowerCase()
+
+  const productNames = (items = []) =>
+    items
+      .map((item) => productDisplayName(productById(item.product_id)))
+      .join(' ')
+
+  const bookingResults = normalized
+    ? reservations
+        .filter((booking) =>
+          [
+            booking.customer_name,
+            booking.customer_phone,
+            booking.unit_no,
+            booking.installation_area,
+            booking.installation_address,
+            booking.place_name,
+            booking.promotion_name,
+            booking.remark,
+            booking.technician_note,
+            productNames(booking.reservation_items),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(normalized)
+        )
+        .slice(0, 8)
+    : []
+
+  const jobResults = normalized
+    ? jobs
+        .filter((job) =>
+          [
+            job.job_no,
+            job.invoice_no,
+            job.customer_name,
+            job.customer_phone,
+            job.unit_no,
+            job.installation_area,
+            job.installation_address,
+            job.place_name,
+            job.remark,
+            job.completion_remark,
+            job.technician_note,
+            productNames(job.job_items),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase()
+            .includes(normalized)
+        )
+        .slice(0, 8)
+    : []
+
+  const productResults = normalized
+    ? inventory
+        .filter((item) =>
+          productDisplayName(item).toLowerCase().includes(normalized)
+        )
+        .slice(0, 8)
+    : []
+
+  const total = bookingResults.length + jobResults.length + productResults.length
+
+  return (
+    <div className="transaction-backdrop global-search-backdrop" onClick={close}>
+      <section className="global-search-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="global-search-head">
+          <div className="global-search-input-wrap">
+            <Search size={18} />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Customer, phone, Job No., address, model..."
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery('')} aria-label="Clear search">
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <button type="button" className="icon-button" onClick={close} aria-label="Close search">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="global-search-body">
+          {!normalized ? (
+            <div className="global-search-empty">
+              <Search size={26} />
+              <h3>Search SVR Operations</h3>
+              <p>Try customer name, phone number, address, Job No., invoice number or smart lock model.</p>
+            </div>
+          ) : total === 0 ? (
+            <div className="global-search-empty">
+              <Search size={26} />
+              <h3>No result found</h3>
+              <p>Try a shorter customer name, phone digits or product model.</p>
+            </div>
+          ) : (
+            <div className="global-search-groups">
+              {bookingResults.length > 0 && (
+                <section>
+                  <div className="global-search-section-title"><CalendarDays size={14} /><strong>Bookings</strong><span>{bookingResults.length}</span></div>
+                  <div className="global-search-results">
+                    {bookingResults.map((booking) => (
+                      <button type="button" key={booking.id} onClick={() => openBooking(booking)}>
+                        <div className="global-search-result-icon"><CalendarDays size={16} /></div>
+                        <div>
+                          <strong>{booking.customer_name}</strong>
+                          <span>{booking.customer_phone || 'No phone'} • {booking.unit_no ? `${booking.unit_no} • ` : ''}{booking.installation_area || booking.place_name || 'Area TBC'}</span>
+                          <small>{productNames(booking.reservation_items) || booking.promotion_name || 'Product TBC'}</small>
+                        </div>
+                        <ChevronRight size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {jobResults.length > 0 && (
+                <section>
+                  <div className="global-search-section-title"><FileText size={14} /><strong>Jobs</strong><span>{jobResults.length}</span></div>
+                  <div className="global-search-results">
+                    {jobResults.map((job) => (
+                      <button type="button" key={job.id} onClick={() => openJob(job)}>
+                        <div className="global-search-result-icon"><FileText size={16} /></div>
+                        <div>
+                          <strong>{job.customer_name || job.job_no}</strong>
+                          <span>{job.job_no || 'Job'}{job.invoice_no ? ` • Invoice ${job.invoice_no}` : ''}</span>
+                          <small>{productNames(job.job_items) || job.installation_area || 'Completed Job'}</small>
+                        </div>
+                        <ChevronRight size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {productResults.length > 0 && (
+                <section>
+                  <div className="global-search-section-title"><Boxes size={14} /><strong>Inventory</strong><span>{productResults.length}</span></div>
+                  <div className="global-search-results">
+                    {productResults.map((item) => (
+                      <button type="button" key={item.product_id} onClick={() => openProduct(item)}>
+                        <div className="global-search-result-icon"><Boxes size={16} /></div>
+                        <div>
+                          <strong>{productDisplayName(item)}</strong>
+                          <span>{item.category === 'smart_lock' ? 'Smart Lock' : 'Lock Body'}</span>
+                          <small>Available {item.available_stock} • Physical {item.physical_stock}</small>
+                        </div>
+                        <ChevronRight size={16} />
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function AdjustStockModal({
+  item,
+  form,
+  setForm,
+  locations,
+  locationStock,
+  productDisplayName,
+  saving,
+  error,
+  changeLocation,
+  close,
+  save,
+}) {
+  const currentQty = Number(
+    locationStock.find(
+      (row) =>
+        row.product_id === item.product_id &&
+        row.location_id === form.location_id
+    )?.quantity || 0
+  )
+  const actualQty = Math.max(0, Math.floor(Number(form.actual_quantity) || 0))
+  const difference = actualQty - currentQty
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="mini-modal adjust-stock-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="mini-modal-head">
+          <div>
+            <p className="kicker">SAFE STOCK ADJUSTMENT</p>
+            <h2>Adjust Stock</h2>
+            <p>{productDisplayName(item)}</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="transaction-field">
+          <label>Stock Holder *</label>
+          <select value={form.location_id} onChange={(event) => changeLocation(event.target.value)}>
+            <option value="">Select Stock Holder</option>
+            {locations.map((location) => (
+              <option key={location.id} value={location.id}>{location.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="adjust-stock-summary">
+          <div><span>Current</span><strong>{currentQty}</strong></div>
+          <ArrowRightLeft size={18} />
+          <div className="actual"><span>Actual</span><strong>{actualQty}</strong></div>
+          <div className={difference === 0 ? 'difference neutral' : difference > 0 ? 'difference positive' : 'difference negative'}>
+            <span>Change</span>
+            <strong>{difference > 0 ? '+' : ''}{difference}</strong>
+          </div>
+        </div>
+
+        <div className="transaction-field">
+          <label>Actual Physical Quantity *</label>
+          <input
+            type="number"
+            min="0"
+            inputMode="numeric"
+            value={form.actual_quantity}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              actual_quantity: Math.max(0, Math.floor(Number(event.target.value) || 0)),
+            }))}
+          />
+        </div>
+
+        <div className="transaction-field">
+          <label>Reason *</label>
+          <textarea
+            rows="3"
+            value={form.reason}
+            onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))}
+            placeholder="e.g. Testing correction / physical count difference / damaged unit..."
+          />
+          <div className="adjust-reason-chips">
+            {['Testing correction', 'Physical count correction', 'Damaged / missing unit'].map((reason) => (
+              <button type="button" key={reason} onClick={() => setForm((current) => ({ ...current, reason }))}>{reason}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="adjust-stock-warning">
+          <ShieldCheck size={16} />
+          <span>This does not edit old history. SVR will create a new Adjustment In / Out record.</span>
+        </div>
+
+        {error && <div className="transaction-error">{error}</div>}
+
+        <div className="mini-modal-actions">
+          <button className="secondary-button" onClick={close} disabled={saving}>Cancel</button>
+          <button className="primary-button" onClick={save} disabled={saving || !form.location_id || !form.reason.trim()}>
+            {saving ? 'Saving...' : difference === 0 ? 'Save Check' : `Adjust ${difference > 0 ? '+' : ''}${difference}`}
+          </button>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -4626,7 +5207,12 @@ function BookingV6Modal({ editor, form, items, products, locations, saving, erro
           {form.schedule_type === 'estimated' && <div className="transaction-field"><label>Estimated Installation *</label><input value={form.estimated_installation} onChange={(e) => updateForm('estimated_installation', e.target.value)} placeholder="e.g. Dec '26 • house still renovating" /></div>}
           {form.schedule_type === 'exact' && <div className="transaction-two-col"><div className="transaction-field"><label>Date *</label><input type="date" value={form.installation_date} onChange={(e) => updateForm('installation_date', e.target.value)} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.installation_time} onChange={(e) => updateForm('installation_time', e.target.value)} /></div></div>}
           <div className="transaction-field"><label>Technician / Stock Holder</label><select value={form.installer_location_id} onChange={(e) => updateForm('installer_location_id', e.target.value)}><option value="">TBC / Not assigned</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
-          <div className="transaction-field"><label>Remark</label><textarea rows="3" value={form.remark} onChange={(e) => updateForm('remark', e.target.value)} placeholder="Customer house still renovating, expected Dec '26..." /></div>
+          <div className="transaction-field technician-note-editor">
+            <label><AlertTriangle size={14} /> Important Note for Technician</label>
+            <textarea rows="3" value={form.technician_note} onChange={(e) => updateForm('technician_note', e.target.value)} placeholder="e.g. Keep old lock for customer / bring long cylinder / register at guard house / collect balance RM500..." />
+            <small>Shown prominently in Today, Board, Complete Installation and Pending Settle.</small>
+          </div>
+          <div className="transaction-field"><label>Internal Remark</label><textarea rows="3" value={form.remark} onChange={(e) => updateForm('remark', e.target.value)} placeholder="Customer house still renovating, expected Dec '26..." /></div>
           {error && <div className="transaction-error">{error}</div>}
         </div>
         <div className="transaction-footer"><button className="secondary-button" onClick={close} disabled={saving}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Booking'}</button></div>
@@ -4641,6 +5227,9 @@ function HandoverV6Modal({ booking, form, setForm, locations, saving, error, clo
 
 function CompleteInstallationV6Modal({ booking, form, setForm, files, setFiles, locations, saving, error, close, save }) {
   return <div className="transaction-backdrop" onClick={close}><section className="transaction-modal completion-v6-modal" onClick={(e) => e.stopPropagation()}><div className="transaction-modal-head"><div><p className="kicker">TECHNICIAN UPDATE</p><h2>Complete Installation</h2><p>{booking.customer_name} • upload site photos and close / pending settle.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div><div className="transaction-scroll">
+    {booking.technician_note && (
+      <div className="completion-important-note"><AlertTriangle size={16} /><div><strong>Important Note</strong><p>{booking.technician_note}</p></div></div>
+    )}
     <div className="transaction-field"><label>Stock Holder / Technician *</label><select value={form.stock_location_id} onChange={(e) => setForm((c) => ({...c, stock_location_id:e.target.value}))}><option value="">Select</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
     <div className="completion-checks"><label><input type="checkbox" checked={form.customer_taught} onChange={(e) => setForm((c) => ({...c, customer_taught:e.target.checked}))} /><span><strong>Customer taught how to use lock</strong><small>Basic usage / app / charging explained</small></span></label><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked customer for review</strong><small>Google / Facebook review requested</small></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong><small>Customer already submitted review</small></span></label></div>
     <div className="transaction-field"><label>Installation Photos</label><label className="photo-upload-box"><Upload size={22} /><strong>Choose Photos</strong><span>Front / inside / lock body / overall door</span><input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label>{files.length > 0 && <div className="selected-files">{files.map((f) => <span key={`${f.name}-${f.size}`}><ImageIcon size={13} /> {f.name}</span>)}</div>}</div>
@@ -5361,6 +5950,7 @@ function JobsPage({
                 {job.settlement_status === 'pending' && <span className="pending-badge"><AlertTriangle size={13} /> Pending Settle</span>}
               </div>
 
+              {job.technician_note && <div className="job-technician-note"><strong>Technician Note:</strong> {job.technician_note}</div>}
               {job.pending_issue && <div className="job-pending-note"><strong>Pending:</strong> {job.pending_issue}</div>}
 
               {jobPhotos.filter((photo) => photo.job_id === job.id).length > 0 && (
@@ -5449,6 +6039,9 @@ function Dashboard({
   setActiveTab,
   setMobileActionsOpen,
   openStockCount,
+  currentRole,
+  profile,
+  locationById,
 }) {
   const lowStock = inventory.filter(
     (item) =>
@@ -5460,6 +6053,55 @@ function Dashboard({
   const topProducts = inventory
     .filter((item) => item.category === 'smart_lock')
     .slice(0, 5)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  const tomorrowKey = formatLocalDateKey(tomorrow)
+  const threeDaysAgo = new Date(today)
+  threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+  const thirtyDaysAgo = new Date(today)
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+  const pendingSettle = followups.filter((item) =>
+    ['pending', 'scheduled'].includes(item.status)
+  )
+  const staleInvoices = jobs.filter((item) =>
+    item.status !== 'voided' &&
+    item.invoice_status === 'not_invoiced' &&
+    item.completed_at &&
+    new Date(item.completed_at) < threeDaysAgo
+  )
+  const tomorrowNotHanded = reservations.filter((item) =>
+    item.status === 'reserved' &&
+    item.booking_type === 'product_confirmed' &&
+    item.schedule_type === 'exact' &&
+    item.installation_date === tomorrowKey &&
+    item.handover_status !== 'handed_over'
+  )
+  const longTbc = reservations.filter((item) =>
+    item.status === 'reserved' &&
+    item.schedule_type === 'tbc' &&
+    item.created_at &&
+    new Date(item.created_at) < thirtyDaysAgo
+  )
+  const attentionTotal =
+    pendingSettle.length +
+    staleInvoices.length +
+    lowStock.length +
+    tomorrowNotHanded.length +
+    longTbc.length
+
+  const technicianToday = currentRole === 'technician'
+    ? reservations
+        .filter((item) =>
+          item.status === 'reserved' &&
+          item.schedule_type === 'exact' &&
+          item.installation_date === formatLocalDateKey(today)
+        )
+        .sort((a, b) => String(a.installation_time || '').localeCompare(String(b.installation_time || '')))
+    : []
 
   return (
     <div className="page-stack fade-in">
@@ -5489,6 +6131,35 @@ function Dashboard({
           </button>
         </div>
       </section>
+
+      {currentRole === 'technician' && (
+        <section className="surface-card technician-today-card">
+          <div className="section-head">
+            <div>
+              <p className="kicker">MY TODAY</p>
+              <h3>{technicianToday.length} installation{technicianToday.length === 1 ? '' : 's'}</h3>
+            </div>
+            <button className="text-link" onClick={() => setActiveTab('operations')}>
+              Open Today <ChevronRight size={15} />
+            </button>
+          </div>
+          <div className="technician-today-list">
+            {technicianToday.slice(0, 4).map((booking) => (
+              <div key={booking.id} className="technician-today-row">
+                <strong>{booking.installation_time ? String(booking.installation_time).slice(0, 5) : 'TBC'}</strong>
+                <div>
+                  <b>{booking.customer_name}</b>
+                  <span>{booking.unit_no ? `${booking.unit_no} • ` : ''}{booking.installation_area || booking.place_name || 'Site'}</span>
+                  {booking.technician_note && <small>⚠ {booking.technician_note}</small>}
+                </div>
+              </div>
+            ))}
+            {technicianToday.length === 0 && (
+              <EmptyState title="No installation today" text="Your assigned jobs for today will appear here." />
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="home-stock-snapshot">
         <button
@@ -5538,73 +6209,38 @@ function Dashboard({
             <p className="kicker">NEEDS ATTENTION</p>
             <h3>Quick follow-up</h3>
           </div>
-          <span className="home-focus-total">
-            {
-              reservations.filter((item) => item.status === 'reserved')
-                .length +
-              followups.filter((item) =>
-                ['pending', 'scheduled'].includes(item.status)
-              ).length +
-              jobs.filter(
-                (item) => item.invoice_status === 'not_invoiced'
-              ).length
-            }
-          </span>
+          <span className="home-focus-total">{attentionTotal}</span>
         </div>
 
         <div className="home-focus-list">
           <button onClick={() => setActiveTab('operations')}>
-            <div className="home-focus-icon">
-              <CalendarDays size={16} />
-            </div>
-            <div>
-              <strong>Active Bookings</strong>
-              <span>Reserved / TBC / scheduled</span>
-            </div>
-            <b>
-              {
-                reservations.filter(
-                  (item) => item.status === 'reserved'
-                ).length
-              }
-            </b>
-            <ChevronRight size={16} />
-          </button>
-
-          <button onClick={() => setActiveTab('operations')}>
-            <div className="home-focus-icon warning">
-              <AlertTriangle size={16} />
-            </div>
-            <div>
-              <strong>Pending Settle</strong>
-              <span>Need return / follow-up</span>
-            </div>
-            <b>
-              {
-                followups.filter((item) =>
-                  ['pending', 'scheduled'].includes(item.status)
-                ).length
-              }
-            </b>
-            <ChevronRight size={16} />
+            <div className="home-focus-icon warning"><AlertTriangle size={16} /></div>
+            <div><strong>Pending Settle</strong><span>Need return / follow-up</span></div>
+            <b>{pendingSettle.length}</b><ChevronRight size={16} />
           </button>
 
           <button onClick={() => setActiveTab('jobs')}>
-            <div className="home-focus-icon">
-              <ReceiptText size={16} />
-            </div>
-            <div>
-              <strong>Not Invoiced</strong>
-              <span>Completed jobs to bill</span>
-            </div>
-            <b>
-              {
-                jobs.filter(
-                  (item) => item.invoice_status === 'not_invoiced'
-                ).length
-              }
-            </b>
-            <ChevronRight size={16} />
+            <div className="home-focus-icon"><ReceiptText size={16} /></div>
+            <div><strong>Not Invoiced &gt; 3 Days</strong><span>Completed jobs waiting billing</span></div>
+            <b>{staleInvoices.length}</b><ChevronRight size={16} />
+          </button>
+
+          <button onClick={() => setActiveTab('inventory')}>
+            <div className="home-focus-icon warning"><PackageMinus size={16} /></div>
+            <div><strong>Low Stock</strong><span>Available at / below minimum</span></div>
+            <b>{lowStock.length}</b><ChevronRight size={16} />
+          </button>
+
+          <button onClick={() => setActiveTab('operations')}>
+            <div className="home-focus-icon"><PackageCheck size={16} /></div>
+            <div><strong>Tomorrow • Not Handed Over</strong><span>Prepare stock before installation</span></div>
+            <b>{tomorrowNotHanded.length}</b><ChevronRight size={16} />
+          </button>
+
+          <button onClick={() => setActiveTab('operations')}>
+            <div className="home-focus-icon"><CalendarDays size={16} /></div>
+            <div><strong>TBC Over 30 Days</strong><span>Old bookings needing follow-up</span></div>
+            <b>{longTbc.length}</b><ChevronRight size={16} />
           </button>
         </div>
       </section>
@@ -5861,6 +6497,7 @@ function InventoryItemDetail({
   profileByUserId,
   movementSubtitle,
   formatDate,
+  openAdjustStock,
   close,
 }) {
   const [filter, setFilter] = useState('all')
@@ -5936,6 +6573,14 @@ function InventoryItemDetail({
           </div>
         </div>
 
+        {isManagement && (
+          <div className="inventory-detail-actions">
+            <button className="secondary-button" onClick={() => openAdjustStock(item)}>
+              <SlidersHorizontal size={15} /> Adjust Stock
+            </button>
+          </div>
+        )}
+
         <div className="inventory-detail-stats">
           <div><span>Physical</span><strong>{item.physical_stock}</strong></div>
           <div><span>Reserved</span><strong>{item.reserved_stock}</strong></div>
@@ -5963,7 +6608,14 @@ function InventoryItemDetail({
                   <strong>{location?.name || 'Unknown Location'}</strong>
                   <span>{location?.location_type?.replaceAll('_', ' ') || 'Stock Holder'}</span>
                 </div>
-                <b>{Number(row.quantity || 0)}</b>
+                <div className="item-location-qty-action">
+                  <b>{Number(row.quantity || 0)}</b>
+                  {isManagement && (
+                    <button type="button" onClick={() => openAdjustStock(item, row.location_id)}>
+                      Adjust
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })}

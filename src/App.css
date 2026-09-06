@@ -7778,3 +7778,671 @@ body {
     font-size: 8.5px;
   }
 }
+
+/* =========================================================
+   V6.3 — WORKFLOW OPTIMIZATION
+   Global Search / Adjust Stock / Technician Today / Notes
+   ========================================================= */
+
+.header-search-button {
+  position: relative;
+}
+
+/* Global Search */
+.global-search-backdrop {
+  align-items: flex-start;
+  padding-top: clamp(24px, 8vh, 72px);
+}
+
+.global-search-modal {
+  width: min(760px, calc(100vw - 28px));
+  max-height: min(760px, calc(100vh - 48px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(17, 18, 20, .08);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(17, 18, 20, .18);
+}
+
+.global-search-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-bottom: 1px solid #eceef0;
+}
+
+.global-search-input-wrap {
+  min-width: 0;
+  flex: 1;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid #dfe2e5;
+  border-radius: 13px;
+  background: #f8f9fa;
+}
+
+.global-search-input-wrap > svg {
+  flex: 0 0 auto;
+  color: #777c82;
+}
+
+.global-search-input-wrap input {
+  min-width: 0;
+  flex: 1;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+}
+
+.global-search-input-wrap button {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #8a8e94;
+}
+
+.global-search-body {
+  min-height: 280px;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.global-search-empty {
+  min-height: 250px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 7px;
+  text-align: center;
+  color: #92969b;
+}
+
+.global-search-empty h3 {
+  margin: 4px 0 0;
+  color: #2b2e32;
+  font-size: 16px;
+}
+
+.global-search-empty p {
+  max-width: 390px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.global-search-groups {
+  display: grid;
+  gap: 18px;
+}
+
+.global-search-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  color: #777c82;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.global-search-section-title strong {
+  color: #555a60;
+}
+
+.global-search-section-title span {
+  margin-left: auto;
+  min-width: 24px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #f1f2f3;
+  text-align: center;
+  font-size: 9px;
+}
+
+.global-search-results {
+  overflow: hidden;
+  border: 1px solid #eceef0;
+  border-radius: 14px;
+}
+
+.global-search-results > button {
+  width: 100%;
+  min-height: 66px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid #eff0f1;
+  background: #fff;
+  color: inherit;
+  text-align: left;
+}
+
+.global-search-results > button:last-child {
+  border-bottom: 0;
+}
+
+.global-search-results > button:hover {
+  background: #f8f9fa;
+}
+
+.global-search-result-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: #f1f2f3;
+  color: #555a60;
+}
+
+.global-search-results > button > div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.global-search-results strong,
+.global-search-results span,
+.global-search-results small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-search-results strong {
+  font-size: 12px;
+}
+
+.global-search-results span {
+  color: #70757b;
+  font-size: 9.5px;
+}
+
+.global-search-results small {
+  color: #9a9ea3;
+  font-size: 8.5px;
+}
+
+/* Adjust Stock */
+.adjust-stock-modal {
+  width: min(470px, calc(100vw - 28px));
+}
+
+.adjust-stock-summary {
+  display: grid;
+  grid-template-columns: 1fr 22px 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #eceef0;
+  border-radius: 14px;
+  background: #f8f9fa;
+}
+
+.adjust-stock-summary > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.adjust-stock-summary span {
+  color: #888d93;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.adjust-stock-summary strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.adjust-stock-summary .actual strong {
+  color: #111214;
+}
+
+.adjust-stock-summary .difference {
+  padding: 8px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.adjust-stock-summary .difference.positive {
+  background: #eaf6ee;
+  color: #23743c;
+}
+
+.adjust-stock-summary .difference.negative {
+  background: #fff0ee;
+  color: #a94032;
+}
+
+.adjust-stock-summary .difference.neutral {
+  background: #eef0f2;
+  color: #71767c;
+}
+
+.adjust-reason-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.adjust-reason-chips button {
+  min-height: 29px;
+  padding: 0 9px;
+  border: 1px solid #e1e3e5;
+  border-radius: 999px;
+  background: #f7f8f9;
+  color: #666b71;
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.adjust-stock-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px;
+  border-radius: 11px;
+  background: #f2f4f5;
+  color: #666b71;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.adjust-stock-warning svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.inventory-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.item-location-qty-action {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.item-location-qty-action b {
+  min-width: 28px;
+  text-align: right;
+}
+
+.item-location-qty-action button {
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid #e2e4e6;
+  border-radius: 9px;
+  background: #fff;
+  color: #61666c;
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
+/* Important Note */
+.technician-note-editor {
+  padding: 11px;
+  border: 1px solid #ead8a9;
+  border-radius: 13px;
+  background: #fffaf0;
+}
+
+.technician-note-editor > label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8b6517;
+}
+
+.technician-note-editor > small {
+  display: block;
+  margin-top: 5px;
+  color: #9b854f;
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+.technician-important-note {
+  margin-top: 10px;
+  padding: 10px 11px;
+  border: 1px solid #ead8a9;
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.technician-important-note.acknowledged {
+  border-color: #d9e8dc;
+  background: #f5faf6;
+}
+
+.technician-important-note-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.technician-important-note-head > span,
+.technician-important-note-head > small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.technician-important-note-head > span {
+  color: #8a651c;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .4px;
+}
+
+.technician-important-note-head > small {
+  color: #4f7b58;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.technician-important-note p {
+  margin: 7px 0 0;
+  color: #40381f;
+  font-size: 10.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.technician-important-note-footer {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(138, 101, 28, .13);
+}
+
+.technician-important-note-footer span {
+  color: #927c45;
+  font-size: 8px;
+}
+
+.technician-important-note-footer button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 9px;
+  background: #222426;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 800;
+}
+
+.completion-important-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 13px;
+  padding: 11px;
+  border: 1px solid #ead8a9;
+  border-radius: 12px;
+  background: #fffaf0;
+  color: #7d5e1f;
+}
+
+.completion-important-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.completion-important-note strong {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.completion-important-note p {
+  margin: 3px 0 0;
+  color: #473d24;
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.followup-important-note {
+  margin-top: 7px;
+  padding: 7px 8px;
+  border-radius: 9px;
+  background: #fff7e5;
+  color: #7e5e1d;
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.calendar-important-note {
+  margin-top: 3px;
+  padding: 3px 5px;
+  border-radius: 6px;
+  background: #fff4d7;
+  color: #806120 !important;
+  white-space: normal !important;
+  line-height: 1.25;
+}
+
+/* Technician Today */
+.today-mode-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 16px;
+}
+
+.today-mode-head h3 {
+  margin: 2px 0;
+}
+
+.today-mode-head span {
+  color: #7d8288;
+  font-size: 9.5px;
+}
+
+.today-mode-head > strong {
+  min-width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: #17191b;
+  color: #fff;
+  font-size: 17px;
+}
+
+.technician-today-card {
+  padding: 14px;
+}
+
+.technician-today-list {
+  display: grid;
+  gap: 7px;
+}
+
+.technician-today-row {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #eceef0;
+  border-radius: 11px;
+  background: #fafafa;
+}
+
+.technician-today-row > strong {
+  font-size: 12px;
+}
+
+.technician-today-row > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.technician-today-row b {
+  font-size: 11px;
+}
+
+.technician-today-row span {
+  color: #777c82;
+  font-size: 9px;
+}
+
+.technician-today-row small {
+  margin-top: 3px;
+  padding: 5px 6px;
+  border-radius: 7px;
+  background: #fff5dc;
+  color: #7d5c16;
+  font-size: 8.5px;
+  line-height: 1.4;
+}
+
+/* Needs Attention can contain five operational rows now. */
+.home-focus-list {
+  max-height: none !important;
+}
+
+@media (max-width: 720px) {
+  .global-search-backdrop {
+    padding: 0 !important;
+    align-items: stretch !important;
+  }
+
+  .global-search-modal {
+    width: 100% !important;
+    max-height: 100dvh !important;
+    min-height: 100dvh !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .global-search-head {
+    padding: max(10px, env(safe-area-inset-top)) 10px 10px !important;
+  }
+
+  .global-search-input-wrap {
+    min-height: 44px !important;
+  }
+
+  .global-search-input-wrap input {
+    height: 42px !important;
+    font-size: 16px !important;
+  }
+
+  .global-search-body {
+    padding: 10px !important;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .global-search-results > button {
+    min-height: 63px !important;
+    grid-template-columns: 34px minmax(0, 1fr) 16px !important;
+    gap: 9px !important;
+    padding: 9px 10px !important;
+  }
+
+  .global-search-result-icon {
+    width: 32px !important;
+    height: 32px !important;
+  }
+
+  .adjust-stock-modal {
+    width: min(100% - 20px, 430px) !important;
+  }
+
+  .adjust-stock-summary {
+    grid-template-columns: 1fr 18px 1fr 1fr !important;
+    gap: 6px !important;
+    padding: 10px !important;
+  }
+
+  .adjust-stock-summary strong {
+    font-size: 17px !important;
+  }
+
+  .inventory-detail-actions {
+    justify-content: stretch !important;
+  }
+
+  .inventory-detail-actions .secondary-button {
+    width: 100% !important;
+  }
+
+  .technician-important-note {
+    padding: 9px !important;
+  }
+
+  .technician-important-note p {
+    font-size: 10px !important;
+  }
+
+  .today-mode-head {
+    padding: 11px 12px !important;
+  }
+
+  .today-mode-head span {
+    font-size: 8.5px !important;
+    line-height: 1.35 !important;
+  }
+
+  .today-mode-head > strong {
+    min-width: 36px !important;
+    height: 36px !important;
+    border-radius: 11px !important;
+    font-size: 15px !important;
+  }
+
+  .technician-today-card {
+    padding: 11px !important;
+  }
+
+  .home-focus-list button {
+    min-height: 56px !important;
+  }
+}
+
+.job-technician-note {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border-radius: 9px;
+  background: #fff7e5;
+  color: #745817;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.job-technician-note strong {
+  margin-right: 3px;
+}
