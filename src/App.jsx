@@ -296,13 +296,36 @@ function addDays(date, count) {
   return d
 }
 
+
+function leaveDateTimeLabel(value) {
+  if (!value) return ''
+  return new Date(value).toLocaleString('en-MY', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function approvedLeaveConflict(leaves, technicianLocationId, date, time = '') {
+  if (!technicianLocationId || !date) return false
+  const startDay = new Date(`${date}T00:00:00+08:00`).getTime()
+  const endDay = new Date(`${date}T23:59:59+08:00`).getTime()
+  const point = time ? new Date(`${date}T${time}:00+08:00`).getTime() : null
+
+  return (leaves || []).some((leave) => {
+    if (leave.status !== 'approved' || leave.technician_location_id !== technicianLocationId) return false
+    const leaveStart = new Date(leave.start_at).getTime()
+    const leaveEnd = new Date(leave.end_at).getTime()
+    if (point != null) return point >= leaveStart && point < leaveEnd
+    return leaveStart <= endDay && leaveEnd > startDay
+  })
+}
+
 const NAV_ITEMS = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'inventory', label: 'Inventory', icon: Boxes },
+  { id: 'technician', label: 'My Work', icon: Wrench },
+  { id: 'crm', label: 'CRM Leads', icon: MessageCircle },
   { id: 'operations', label: 'Operations', icon: CalendarDays },
-  { id: 'jobs', label: 'Jobs', icon: FileText },
-  { id: 'holders', label: 'Stock Holders', icon: Users },
-  { id: 'activity', label: 'Activity', icon: History },
+  { id: 'customers', label: 'Customers', icon: Users },
   { id: 'more', label: 'More', icon: Menu },
 ]
 
@@ -320,6 +343,25 @@ function App() {
   const [movements, setMovements] = useState([])
   const [reservations, setReservations] = useState([])
   const [jobs, setJobs] = useState([])
+  const [crmLeads, setCrmLeads] = useState([])
+  const [crmLeadNotes, setCrmLeadNotes] = useState([])
+  const [leadStatusFilter, setLeadStatusFilter] = useState('new')
+  const [leadEditor, setLeadEditor] = useState(null)
+  const [leadDetail, setLeadDetail] = useState(null)
+  const [leadUpdateForm, setLeadUpdateForm] = useState({
+    status: 'follow_up',
+    note: '',
+  })
+  const [leadUpdateSaving, setLeadUpdateSaving] = useState(false)
+  const [leadUpdateError, setLeadUpdateError] = useState('')
+  const [leadForm, setLeadForm] = useState({
+    customer_name: '', phone: '', source: 'WhatsApp', region_code: 'jb', region_other: '', area: '',
+    interest_text: '', status: 'new', lead_date: formatLocalDateKey(new Date()),
+    remark: '',
+  })
+  const [leadSaving, setLeadSaving] = useState(false)
+  const [leadError, setLeadError] = useState('')
+  const [customerDetail, setCustomerDetail] = useState(null)
   const [profiles, setProfiles] = useState([])
   const [profile, setProfile] = useState(null)
   const [auditEvents, setAuditEvents] = useState([])
@@ -453,7 +495,7 @@ function App() {
   const [locationError, setLocationError] = useState('')
 
 
-  const [operationsView, setOperationsView] = useState('board')
+  const [operationsView, setOperationsView] = useState('calendar')
 
   const [bookingEditor, setBookingEditor] = useState(null)
   const [bookingForm, setBookingForm] = useState({
@@ -499,8 +541,34 @@ function App() {
     pending_issue: '',
   })
   const [completionFiles, setCompletionFiles] = useState([])
+  const [completionLockBodies, setCompletionLockBodies] = useState([{ product_id: '', quantity: 1 }])
   const [completionSaving, setCompletionSaving] = useState(false)
   const [completionError, setCompletionError] = useState('')
+
+  const [technicianLeaves, setTechnicianLeaves] = useState([])
+  const [leaveEditor, setLeaveEditor] = useState(false)
+  const [leaveForm, setLeaveForm] = useState(() => ({
+    full_day: true,
+    start_date: formatLocalDateKey(new Date()),
+    start_time: '09:00',
+    end_date: formatLocalDateKey(new Date()),
+    end_time: '18:00',
+    reason: '',
+  }))
+  const [leaveSaving, setLeaveSaving] = useState(false)
+  const [leaveError, setLeaveError] = useState('')
+
+  const [completedEditJob, setCompletedEditJob] = useState(null)
+  const [completedEditForm, setCompletedEditForm] = useState({
+    customer_taught: false,
+    review_asked: false,
+    review_received: false,
+    completion_remark: '',
+  })
+  const [completedEditLockBodies, setCompletedEditLockBodies] = useState([{ product_id: '', quantity: 1 }])
+  const [completedEditFiles, setCompletedEditFiles] = useState([])
+  const [completedEditSaving, setCompletedEditSaving] = useState(false)
+  const [completedEditError, setCompletedEditError] = useState('')
 
   const [followups, setFollowups] = useState([])
   const [jobPhotos, setJobPhotos] = useState([])
@@ -549,8 +617,31 @@ function App() {
       setLocationEditor(null)
       return true
     }
+    if (leadDetail) {
+      setLeadDetail(null)
+      setLeadUpdateError('')
+      return true
+    }
+    if (customerDetail) {
+      setCustomerDetail(null)
+      return true
+    }
+    if (leadEditor) {
+      setLeadEditor(null)
+      return true
+    }
     if (followupEditor) {
       setFollowupEditor(null)
+      return true
+    }
+    if (leaveEditor) {
+      setLeaveEditor(false)
+      setLeaveError('')
+      return true
+    }
+    if (completedEditJob) {
+      setCompletedEditJob(null)
+      setCompletedEditError('')
       return true
     }
     if (completionBooking) {
@@ -669,8 +760,8 @@ function App() {
 
       if (state?.svrInventory) {
         restoringHistoryRef.current = true
-        setActiveTab(state.activeTab || 'home')
-        setOperationsView(state.operationsView || 'board')
+        setActiveTab(state.activeTab === 'legacyStockCount' ? 'products' : (state.activeTab || 'home'))
+        setOperationsView(state.operationsView || 'calendar')
       }
       // If there is no SVR state left, the user is already at the first
       // app page. At that point the browser may leave the website normally.
@@ -691,7 +782,12 @@ function App() {
     accessUser,
     productEditor,
     locationEditor,
+    leadDetail,
+    customerDetail,
+    leadEditor,
     followupEditor,
+    leaveEditor,
+    completedEditJob,
     completionBooking,
     handoverBooking,
     bookingEditor,
@@ -783,6 +879,11 @@ function App() {
         { event: '*', schema: 'public', table: 'audit_events' },
         refreshSoon
       )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'technician_leave_requests' },
+        refreshSoon
+      )
       .subscribe()
 
     return () => {
@@ -817,6 +918,11 @@ function App() {
     setMovements([])
     setReservations([])
     setJobs([])
+    setCrmLeads([])
+    setCrmLeadNotes([])
+    setTechnicianLeaves([])
+    setLeadDetail(null)
+    setCustomerDetail(null)
     setProfiles([])
     setProfile(null)
     setAuditEvents([])
@@ -845,6 +951,9 @@ function App() {
       allLocationsResult,
       followupsResult,
       photosResult,
+      crmLeadsResult,
+      crmNotesResult,
+      leavesResult,
     ] = await Promise.all([
       supabase.rpc('get_inventory_summary'),
       supabase.from('locations').select('*').eq('active', true).order('created_at'),
@@ -870,13 +979,17 @@ function App() {
       supabase.from('locations').select('*').order('created_at'),
       supabase.from('job_followups').select('*').order('created_at', { ascending: false }),
       supabase.from('job_photos').select('*').order('created_at', { ascending: false }),
+      supabase.from('crm_leads').select('*').order('updated_at', { ascending: false }),
+      supabase.from('crm_lead_notes').select('*').order('created_at', { ascending: false }).limit(500),
+      supabase.from('technician_leave_requests').select('*').order('start_at', { ascending: true }),
     ])
 
     const firstError =
       inventoryResult.error || locationsResult.error || stockResult.error ||
       movementsResult.error || reservationsResult.error || jobsResult.error ||
       profilesResult.error || auditResult.error || catalogResult.error ||
-      allLocationsResult.error || followupsResult.error || photosResult.error
+      allLocationsResult.error || followupsResult.error || photosResult.error ||
+      crmLeadsResult.error || crmNotesResult.error || leavesResult.error
 
     if (firstError) {
       console.error(firstError)
@@ -906,6 +1019,9 @@ function App() {
       setMovements(movementsResult.data || [])
       setReservations(reservationsResult.data || [])
       setJobs(jobsResult.data || [])
+      setCrmLeads(crmLeadsResult.data || [])
+      setCrmLeadNotes(crmNotesResult.data || [])
+      setTechnicianLeaves(leavesResult.data || [])
       setProfiles(nextProfiles)
       setAuditEvents(auditResult.data || [])
       setProductCatalog(catalogResult.data || [])
@@ -1206,11 +1322,12 @@ function App() {
     setActiveTab('jobs')
   }
 
-  async function openSearchProduct(item) {
+  function openSearchProduct(item) {
     setGlobalSearchOpen(false)
     setGlobalSearch('')
-    setActiveTab('inventory')
-    await openInventoryDetail(item)
+    if (!isManagement) return
+    setActiveTab('products')
+    openProductEditor({ ...item, id: item.id || item.product_id })
   }
 
   function openDirectJob() {
@@ -1531,12 +1648,12 @@ function App() {
     if (reason === null) return
 
     const confirmed = window.confirm(
-      `Confirm VOID ${job.job_no}?\n\nStock used by this Job will be restored. The Job record will remain.`
+      `Confirm VOID ${job.job_no}?\n\nThe Job record will remain for history.`
     )
 
     if (!confirmed) return
 
-    const { error } = await supabase.rpc('void_job', {
+    const { error } = await supabase.rpc('void_job_v7', {
       p_job_id: job.id,
       p_reason: reason.trim() || null,
     })
@@ -1547,7 +1664,7 @@ function App() {
       return
     }
 
-    showToast(`${job.job_no} voided • stock restored`)
+    showToast(`${job.job_no} voided`)
     await loadAppData()
   }
 
@@ -1558,7 +1675,7 @@ function App() {
     }
 
     const typed = window.prompt(
-      `OWNER ONLY\n\nPermanently delete ${job.job_no}?\nStock effect will be reversed and the Job will disappear.\n\nType DELETE to continue:`
+      `OWNER ONLY\n\nPermanently delete ${job.job_no}?\nThe Job will disappear from Operations history.\n\nType DELETE to continue:`
     )
 
     if (typed !== 'DELETE') return
@@ -1568,7 +1685,7 @@ function App() {
       .map((item) => item.storage_path)
       .filter(Boolean)
 
-    const { error } = await supabase.rpc('delete_job_permanently', {
+    const { error } = await supabase.rpc('delete_job_permanently_v7', {
       p_job_id: job.id,
     })
 
@@ -1833,6 +1950,181 @@ function App() {
     showToast('Password updated successfully')
   }
 
+  function openNewLead() {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    setLeadEditor({ type: 'new' })
+    setLeadForm({
+      customer_name: '', phone: '', source: 'WhatsApp', region_code: 'jb', region_other: '', area: '',
+      interest_text: '', status: 'new',
+      lead_date: formatLocalDateKey(new Date()),
+      remark: '',
+    })
+    setLeadError('')
+    setMobileActionsOpen(false)
+  }
+
+  function openEditLead(lead) {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    setLeadEditor({ type: 'edit', lead })
+    setLeadForm({
+      customer_name: lead.customer_name || '',
+      phone: lead.phone || '',
+      source: lead.source || 'WhatsApp',
+      region_code: lead.region_code || 'unassigned',
+      region_other: lead.region_other || '',
+      area: lead.area || '',
+      interest_text: lead.interest_text || '',
+      status: lead.status || 'new',
+      lead_date: lead.lead_date || formatLocalDateKey(lead.created_at || new Date()),
+      remark: lead.remark || '',
+    })
+    setLeadError('')
+  }
+
+  function openLeadDetail(lead) {
+    setLeadDetail(lead)
+    setLeadUpdateForm({
+      status: lead.status || 'new',
+      note: '',
+    })
+    setLeadUpdateError('')
+  }
+
+  function openEditLeadFromDetail(lead) {
+    setLeadDetail(null)
+    openEditLead(lead)
+  }
+
+  async function saveLeadV7() {
+    if (!leadEditor) return
+    if (!leadForm.customer_name.trim() && !leadForm.phone.trim()) {
+      return setLeadError('Customer name or phone is required.')
+    }
+    setLeadSaving(true)
+    setLeadError('')
+    const params = {
+      p_customer_name: leadForm.customer_name.trim() || null,
+      p_phone: leadForm.phone.trim() || null,
+      p_source: leadForm.source || 'Other',
+      p_region_code: leadForm.region_code || 'unassigned',
+      p_region_other: leadForm.region_code === 'others' ? (leadForm.region_other.trim() || null) : null,
+      p_area: leadForm.area.trim() || null,
+      p_interest_text: leadForm.interest_text.trim() || null,
+      p_status: leadForm.status,
+      p_lead_date: leadForm.lead_date || formatLocalDateKey(new Date()),
+      p_remark: leadForm.remark.trim() || null,
+    }
+    const result = leadEditor.type === 'new'
+      ? await supabase.rpc('create_crm_lead_v72', params)
+      : await supabase.rpc('update_crm_lead_v72', { p_lead_id: leadEditor.lead.id, ...params })
+    if (result.error) {
+      console.error(result.error)
+      setLeadError(result.error.message || 'Unable to save lead.')
+      setLeadSaving(false)
+      return
+    }
+    setLeadSaving(false)
+    setLeadEditor(null)
+    showToast(leadEditor.type === 'new' ? 'Lead created' : 'Lead updated')
+    await loadAppData()
+  }
+
+  async function quickLeadStatus(lead, status) {
+    if (!isManagement) return
+    const result = await supabase.rpc('add_crm_lead_update_v72', {
+      p_lead_id: lead.id,
+      p_status: status,
+      p_note: null,
+    })
+    if (result.error) return showToast(result.error.message || 'Unable to update lead')
+    showToast(`Moved to ${CRM_STATUS_LABELS[status] || status}`)
+    await loadAppData()
+  }
+
+  async function saveLeadUpdate() {
+    if (!leadDetail) return
+    const nextStatus = leadUpdateForm.status || leadDetail.status || 'new'
+    const note = leadUpdateForm.note.trim()
+
+    if (nextStatus === 'done' && !leadDetail.converted_reservation_id) {
+      convertLeadToBooking(leadDetail, note)
+      return
+    }
+
+    if (!note && nextStatus === leadDetail.status) {
+      setLeadUpdateError('Write a short update so the follow-up history stays clear.')
+      return
+    }
+
+    setLeadUpdateSaving(true)
+    setLeadUpdateError('')
+    const result = await supabase.rpc('add_crm_lead_update_v72', {
+      p_lead_id: leadDetail.id,
+      p_status: nextStatus,
+      p_note: note || null,
+    })
+
+    if (result.error) {
+      console.error(result.error)
+      setLeadUpdateError(result.error.message || 'Unable to save update.')
+      setLeadUpdateSaving(false)
+      return
+    }
+
+    const now = new Date().toISOString()
+    const nextLead = {
+      ...leadDetail,
+      status: nextStatus,
+      last_contact_at: now,
+      updated_at: now,
+    }
+    setCrmLeads((current) =>
+      current.map((lead) => (lead.id === nextLead.id ? nextLead : lead))
+    )
+    if (result.data) {
+      setCrmLeadNotes((current) => [
+        {
+          id: result.data,
+          lead_id: leadDetail.id,
+          note: note || `Status changed to ${CRM_STATUS_LABELS[nextStatus] || nextStatus}`,
+          status_after: nextStatus,
+          log_type: nextStatus === leadDetail.status ? 'update' : 'status',
+          created_by: session?.user?.id || null,
+          created_at: now,
+        },
+        ...current,
+      ])
+    }
+    setLeadDetail(nextLead)
+    setLeadUpdateForm({ status: nextStatus, note: '' })
+    setLeadUpdateSaving(false)
+    showToast('CRM update logged')
+  }
+
+  function convertLeadToBooking(lead, conversionNote = '') {
+    if (!isManagement) return
+    const leadArea = crmLeadLocationText(lead)
+    const remarkParts = []
+    if (lead.interest_text) remarkParts.push(`CRM: ${lead.interest_text}`)
+    if (conversionNote) remarkParts.push(`Latest follow-up: ${conversionNote}`)
+
+    setLeadEditor(null)
+    setLeadDetail(null)
+    setBookingEditor({ type: 'new', fromLeadId: lead.id, conversionNote })
+    setBookingForm({
+      customer_name: lead.customer_name || '', customer_phone: lead.phone || '', unit_no: '',
+      installation_area: leadArea || lead.area || '', installation_address: '', place_name: '',
+      google_place_id: '', latitude: null, longitude: null,
+      booking_type: 'product_confirmed', promotion_name: '', selling_price: '',
+      deposit_amount: '', payment_status: 'deposit_paid', schedule_type: 'tbc',
+      installation_date: '', installation_time: '', estimated_installation: '',
+      installer_location_id: '', technician_note: '',
+      remark: remarkParts.join('\n'),
+    })
+    setBookingItems([{ product_id: '', quantity: 1 }])
+    setBookingError('')
+  }
+
   function bookingStage(booking) {
     if (booking.booking_type === 'promotion_only') return 'promotion'
     if (booking.schedule_type === 'exact') return 'scheduled'
@@ -1855,6 +2147,12 @@ function App() {
     })
     setBookingItems([{ product_id: '', quantity: 1 }])
     setBookingError('')
+  }
+
+  function openNewCustomer() {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    openNewBooking()
+    setBookingEditor({ type: 'new', directCustomer: true })
   }
 
   function openEditBooking(booking, forceProduct = false) {
@@ -1883,10 +2181,12 @@ function App() {
       technician_note: booking.technician_note || '',
       remark: booking.remark || '',
     })
-    const items = (booking.reservation_items || []).map((item) => ({
-      product_id: item.product_id,
-      quantity: Number(item.quantity),
-    }))
+    const items = (booking.reservation_items || [])
+      .filter((item) => productById(item.product_id)?.category !== 'lock_body')
+      .map((item) => ({
+        product_id: item.product_id,
+        quantity: Number(item.quantity),
+      }))
     setBookingItems(items.length ? items : [{ product_id: '', quantity: 1 }])
     setBookingError('')
   }
@@ -1918,10 +2218,12 @@ function App() {
   async function saveBookingV6() {
     if (!bookingEditor) return
     const cleanItems = bookingForm.booking_type === 'product_confirmed'
-      ? bookingItems.filter((item) => item.product_id).map((item) => ({
-          product_id: item.product_id,
-          quantity: Number(item.quantity),
-        }))
+      ? bookingItems
+          .filter((item) => item.product_id && productById(item.product_id)?.category === 'smart_lock')
+          .map((item) => ({
+            product_id: item.product_id,
+            quantity: Number(item.quantity),
+          }))
       : []
 
     if (!bookingForm.customer_name.trim()) return setBookingError('Customer Name is required.')
@@ -1967,9 +2269,9 @@ function App() {
 
     let result
     if (bookingEditor.type === 'new') {
-      result = await supabase.rpc('create_booking_v63', params)
+      result = await supabase.rpc('create_booking_v7', params)
     } else {
-      result = await supabase.rpc('update_booking_v63', {
+      result = await supabase.rpc('update_booking_v7', {
         p_reservation_id: bookingEditor.booking.id,
         ...params,
       })
@@ -1982,43 +2284,32 @@ function App() {
       return
     }
 
+    const createdReservationId = bookingEditor.type === 'new' ? result.data : null
+    if (bookingEditor.fromLeadId && createdReservationId) {
+      const converted = await supabase.rpc('mark_crm_lead_converted_v72', {
+        p_lead_id: bookingEditor.fromLeadId,
+        p_reservation_id: createdReservationId,
+        p_note: bookingEditor.conversionNote || null,
+      })
+      if (converted.error) console.error(converted.error)
+    }
+
     setBookingEditor(null)
     setBookingSaving(false)
     showToast(bookingEditor.type === 'new' ? 'Booking created' : 'Booking updated')
     await loadAppData()
-    setActiveTab('operations')
+    setActiveTab(bookingEditor.fromLeadId || bookingEditor.directCustomer ? 'customers' : 'operations')
   }
 
-  function openHandover(booking) {
-    const warehouse = locations.find((item) => item.code === 'SVR-JB') || locations.find((item) => item.location_type === 'warehouse') || locations[0]
-    setHandoverBooking(booking)
-    setHandoverForm({
-      from_location_id: booking.handover_from_location_id || warehouse?.id || '',
-      to_location_id: booking.installer_location_id || '',
+  async function openHandover(booking) {
+    if (!isManagement) return showToast('Owner/Admin permission required')
+    const ok = window.confirm(`Mark items prepared for ${booking.customer_name}?\n\nThis is an Operations status only. Bukku remains the stock source of truth.`)
+    if (!ok) return
+    const { error } = await supabase.rpc('mark_booking_items_prepared_v7', {
+      p_reservation_id: booking.id,
     })
-    setHandoverError('')
-  }
-
-  async function saveHandover() {
-    if (!handoverBooking) return
-    if (!handoverForm.from_location_id || !handoverForm.to_location_id) {
-      return setHandoverError('Select From and Technician / To location.')
-    }
-    setHandoverSaving(true)
-    const { error } = await supabase.rpc('handover_booking_stock_v6', {
-      p_reservation_id: handoverBooking.id,
-      p_from_location_id: handoverForm.from_location_id,
-      p_to_location_id: handoverForm.to_location_id,
-    })
-    if (error) {
-      console.error(error)
-      setHandoverError(error.message || 'Handover failed.')
-      setHandoverSaving(false)
-      return
-    }
-    setHandoverBooking(null)
-    setHandoverSaving(false)
-    showToast('Stock handed over to technician')
+    if (error) return showToast(error.message || 'Unable to mark items prepared')
+    showToast('Items marked prepared')
     await loadAppData()
   }
 
@@ -2037,7 +2328,27 @@ function App() {
       pending_issue: '',
     })
     setCompletionFiles([])
+    setCompletionLockBodies([{ product_id: '', quantity: 1 }])
     setCompletionError('')
+  }
+
+  function updateCompletionLockBody(index, field, value) {
+    setCompletionLockBodies((current) => current.map((item, itemIndex) =>
+      itemIndex === index
+        ? { ...item, [field]: field === 'quantity' ? Math.max(1, Number(value) || 1) : value }
+        : item
+    ))
+    setCompletionError('')
+  }
+
+  function addCompletionLockBody() {
+    setCompletionLockBodies((current) => [...current, { product_id: '', quantity: 1 }])
+  }
+
+  function removeCompletionLockBody(index) {
+    setCompletionLockBodies((current) => current.length === 1
+      ? [{ product_id: '', quantity: 1 }]
+      : current.filter((_, itemIndex) => itemIndex !== index))
   }
 
   async function uploadJobPhotos(jobId, files) {
@@ -2069,21 +2380,24 @@ function App() {
 
   async function saveCompleteInstallation() {
     if (!completionBooking) return
-    if (!completionForm.stock_location_id) return setCompletionError('Select the stock holder / technician.')
     if (completionForm.pending_settle && !completionForm.pending_issue.trim()) {
       return setCompletionError('Pending Settle must state what is not completed.')
     }
 
+    const cleanLockBodies = completionLockBodies
+      .filter((item) => item.product_id)
+      .map((item) => ({ product_id: item.product_id, quantity: Number(item.quantity) }))
+
     setCompletionSaving(true)
     setCompletionError('')
-    const { data, error } = await supabase.rpc('complete_booking_installation_v6', {
+    const { data, error } = await supabase.rpc('complete_booking_installation_v73', {
       p_reservation_id: completionBooking.id,
-      p_stock_location_id: completionForm.stock_location_id,
       p_customer_taught: completionForm.customer_taught,
       p_review_asked: completionForm.review_asked,
       p_review_received: completionForm.review_received,
       p_completion_remark: completionForm.completion_remark.trim() || null,
       p_pending_issue: completionForm.pending_settle ? completionForm.pending_issue.trim() : null,
+      p_lock_bodies: cleanLockBodies,
     })
 
     if (error) {
@@ -2102,7 +2416,169 @@ function App() {
     setCompletionSaving(false)
     showToast(failed.length ? `${jobNo || 'Job'} saved • ${failed.length} photo(s) failed` : `${jobNo || 'Job'} completed`)
     await loadAppData()
-    setActiveTab(completionForm.pending_settle ? 'operations' : 'jobs')
+    setActiveTab('operations')
+  }
+
+
+  function openLeaveRequest() {
+    const today = formatLocalDateKey(new Date())
+    setLeaveForm({
+      full_day: true,
+      start_date: today,
+      start_time: '09:00',
+      end_date: today,
+      end_time: '18:00',
+      reason: '',
+    })
+    setLeaveError('')
+    setLeaveEditor(true)
+    setMobileActionsOpen(false)
+  }
+
+  function addDateKeyDays(dateKey, days) {
+    const date = new Date(`${dateKey}T12:00:00`)
+    date.setDate(date.getDate() + days)
+    return formatLocalDateKey(date)
+  }
+
+  async function saveLeaveRequest() {
+    if (!leaveForm.start_date || !leaveForm.end_date) {
+      return setLeaveError('Start date and end date are required.')
+    }
+    if (!leaveForm.full_day && (!leaveForm.start_time || !leaveForm.end_time)) {
+      return setLeaveError('Start time and end time are required.')
+    }
+
+    const startAt = leaveForm.full_day
+      ? `${leaveForm.start_date}T00:00:00+08:00`
+      : `${leaveForm.start_date}T${leaveForm.start_time}:00+08:00`
+    const endAt = leaveForm.full_day
+      ? `${addDateKeyDays(leaveForm.end_date, 1)}T00:00:00+08:00`
+      : `${leaveForm.end_date}T${leaveForm.end_time}:00+08:00`
+
+    if (new Date(endAt) <= new Date(startAt)) {
+      return setLeaveError('Leave end must be after the start.')
+    }
+
+    setLeaveSaving(true)
+    setLeaveError('')
+    const { error } = await supabase.rpc('apply_technician_leave_v75', {
+      p_start_at: startAt,
+      p_end_at: endAt,
+      p_full_day: leaveForm.full_day,
+      p_reason: leaveForm.reason.trim() || null,
+    })
+    if (error) {
+      console.error(error)
+      setLeaveError(error.message || 'Unable to submit leave request.')
+      setLeaveSaving(false)
+      return
+    }
+    setLeaveEditor(false)
+    setLeaveSaving(false)
+    showToast('Leave request submitted')
+    await loadAppData()
+    setActiveTab('operations')
+    setOperationsView('leave')
+  }
+
+  async function decideLeave(leave, decision) {
+    if (!isManagement || !leave?.id) return
+    const note = decision === 'rejected'
+      ? window.prompt('Reason for rejecting? (optional)', leave.decision_note || '')
+      : null
+    if (decision === 'rejected' && note === null) return
+    const { error } = await supabase.rpc('decide_technician_leave_v75', {
+      p_leave_id: leave.id,
+      p_decision: decision,
+      p_note: note || null,
+    })
+    if (error) {
+      console.error(error)
+      return showToast(error.message || 'Unable to update leave request')
+    }
+    showToast(decision === 'approved' ? 'Leave approved' : 'Leave rejected')
+    await loadAppData()
+  }
+
+  async function cancelLeave(leave) {
+    if (!leave?.id) return
+    const ok = window.confirm('Cancel this leave request?')
+    if (!ok) return
+    const { error } = await supabase.rpc('cancel_technician_leave_v75', { p_leave_id: leave.id })
+    if (error) {
+      console.error(error)
+      return showToast(error.message || 'Unable to cancel leave request')
+    }
+    showToast('Leave request cancelled')
+    await loadAppData()
+  }
+
+  function openEditCompletedJob(job) {
+    if (!job || job.status !== 'completed') return
+    const lockBodies = (job.job_items || [])
+      .filter((item) => productById(item.product_id)?.category === 'lock_body')
+      .map((item) => ({ product_id: item.product_id, quantity: Number(item.quantity || 1) }))
+    setCompletedEditJob(job)
+    setCompletedEditForm({
+      customer_taught: Boolean(job.customer_taught),
+      review_asked: Boolean(job.review_asked),
+      review_received: Boolean(job.review_received),
+      completion_remark: job.completion_remark || '',
+    })
+    setCompletedEditLockBodies(lockBodies.length ? lockBodies : [{ product_id: '', quantity: 1 }])
+    setCompletedEditFiles([])
+    setCompletedEditError('')
+  }
+
+  function updateCompletedEditLockBody(index, field, value) {
+    setCompletedEditLockBodies((current) => current.map((item, itemIndex) =>
+      itemIndex === index
+        ? { ...item, [field]: field === 'quantity' ? Math.max(1, Number(value) || 1) : value }
+        : item
+    ))
+    setCompletedEditError('')
+  }
+
+  function addCompletedEditLockBody() {
+    setCompletedEditLockBodies((current) => [...current, { product_id: '', quantity: 1 }])
+  }
+
+  function removeCompletedEditLockBody(index) {
+    setCompletedEditLockBodies((current) => current.length === 1
+      ? [{ product_id: '', quantity: 1 }]
+      : current.filter((_, itemIndex) => itemIndex !== index))
+  }
+
+  async function saveCompletedJobEdit() {
+    if (!completedEditJob) return
+    const cleanLockBodies = completedEditLockBodies
+      .filter((item) => item.product_id)
+      .map((item) => ({ product_id: item.product_id, quantity: Number(item.quantity || 1) }))
+
+    setCompletedEditSaving(true)
+    setCompletedEditError('')
+    const { error } = await supabase.rpc('update_completed_job_v75', {
+      p_job_id: completedEditJob.id,
+      p_customer_taught: completedEditForm.customer_taught,
+      p_review_asked: completedEditForm.review_asked,
+      p_review_received: completedEditForm.review_received,
+      p_completion_remark: completedEditForm.completion_remark.trim() || null,
+      p_lock_bodies: cleanLockBodies,
+    })
+    if (error) {
+      console.error(error)
+      setCompletedEditError(error.message || 'Unable to update completed job.')
+      setCompletedEditSaving(false)
+      return
+    }
+
+    let failed = []
+    if (completedEditFiles.length) failed = await uploadJobPhotos(completedEditJob.id, completedEditFiles)
+    setCompletedEditJob(null)
+    setCompletedEditSaving(false)
+    showToast(failed.length ? `Job updated • ${failed.length} photo(s) failed` : 'Completed job updated')
+    await loadAppData()
   }
 
   function openFollowup(followup, mode = 'schedule') {
@@ -2769,7 +3245,7 @@ function App() {
       <div className="boot-screen">
         <div className="brand-mark large">SVR</div>
         <div className="boot-line" />
-        <p>Loading inventory...</p>
+        <p>Loading SVR...</p>
       </div>
     )
   }
@@ -2780,11 +3256,11 @@ function App() {
         <div className="auth-visual">
           <div className="auth-visual-content">
             <div className="brand-mark">SVR</div>
-            <p className="kicker light">INVENTORY MANAGEMENT</p>
-            <h1>Know every lock.<br />Know where it is.</h1>
+            <p className="kicker light">CRM & OPERATIONS</p>
+            <h1>Every lead.<br />Every job. One place.</h1>
             <p>
-              One clean place for SVR stock, reservations,
-              technicians and agents.
+              One clean place for SVR sales follow-up,
+              bookings, technicians and after-sales.
             </p>
           </div>
         </div>
@@ -2794,15 +3270,15 @@ function App() {
             <div className="auth-mobile-brand">
               <div className="brand-mark">SVR</div>
               <div>
-                <strong>SVR Inventory</strong>
-                <span>Stock Management</span>
+                <strong>SVR CRM & Operations</strong>
+                <span>Sales • Installation • After Sales</span>
               </div>
             </div>
 
             <p className="kicker">WELCOME BACK</p>
             <h2>Sign in</h2>
             <p className="muted">
-              Use your SVR Inventory account to continue.
+              Use your SVR account to continue.
             </p>
 
             <form onSubmit={handleLogin}>
@@ -2865,7 +3341,7 @@ function App() {
           <ShieldCheck size={30} />
           <h2>Account access is not active</h2>
           <p>
-            This account exists, but SVR Inventory access is disabled or
+            This account exists, but SVR CRM access is disabled or
             has not been assigned yet. Ask the Owner to update User Access.
           </p>
           <strong>{session.user.email}</strong>
@@ -2878,42 +3354,111 @@ function App() {
   }
 
   const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (isManagement) return true
-    if (isTechnician) {
-      return ['home', 'inventory', 'operations', 'jobs', 'activity', 'more'].includes(
-        item.id
-      )
-    }
-    if (isAgent) {
-      return ['home', 'inventory', 'jobs', 'more'].includes(item.id)
-    }
-    return ['home', 'inventory', 'more'].includes(item.id)
+    if (isManagement) return item.id !== 'technician'
+    if (isTechnician) return ['home', 'technician', 'operations', 'more'].includes(item.id)
+    return ['home', 'more'].includes(item.id)
   })
 
   const allowedJobLocations = isTechnician
     ? locations.filter((item) => item.id === profile?.location_id)
     : locations
 
+  const customerRecords = (() => {
+    const map = new Map()
+
+    const ensureCustomer = (row) => {
+      const phone = String(row?.customer_phone || '').replace(/\D/g, '')
+      const name = String(row?.customer_name || '').trim()
+      const key = phone || name.toLowerCase()
+      if (!key) return null
+
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          customer_name: name || 'Customer',
+          customer_phone: row?.customer_phone || '',
+          area: row?.installation_area || '',
+          latest_at: row?.updated_at || row?.completed_at || row?.created_at || '',
+          bookings: [],
+          jobs: [],
+          followups: [],
+          pending_products: [],
+          installed_products: [],
+          installed_lock_bodies: [],
+        })
+      }
+
+      const item = map.get(key)
+      if (!item.customer_phone && row?.customer_phone) item.customer_phone = row.customer_phone
+      if (!item.area && row?.installation_area) item.area = row.installation_area
+      const when = row?.updated_at || row?.completed_at || row?.created_at || ''
+      if (when && (!item.latest_at || when > item.latest_at)) item.latest_at = when
+      return item
+    }
+
+    reservations.forEach((booking) => {
+      const item = ensureCustomer(booking)
+      if (!item) return
+      item.bookings.push(booking)
+      if (booking.status === 'reserved') {
+        ;(booking.reservation_items || []).forEach((row) => {
+          const product = productById(row.product_id)
+          if (product?.category === 'lock_body') return
+          const name = productDisplayName(product)
+          if (name && !item.pending_products.includes(name)) item.pending_products.push(name)
+        })
+      }
+    })
+
+    jobs.filter((job) => job.status !== 'voided').forEach((job) => {
+      const item = ensureCustomer(job)
+      if (!item) return
+      item.jobs.push(job)
+      if (job.status === 'completed') {
+        ;(job.job_items || []).forEach((row) => {
+          const product = productById(row.product_id)
+          const name = productDisplayName(product)
+          if (!name) return
+          if (product?.category === 'lock_body') {
+            if (!item.installed_lock_bodies.includes(name)) item.installed_lock_bodies.push(name)
+          } else if (!item.installed_products.includes(name)) {
+            item.installed_products.push(name)
+          }
+        })
+      }
+    })
+
+    followups
+      .filter((followup) => ['pending', 'scheduled'].includes(followup.status))
+      .forEach((followup) => {
+        const job = jobs.find((item) => item.id === followup.job_id)
+        if (!job || job.status === 'voided') return
+        const customer = ensureCustomer(job)
+        if (!customer) return
+        customer.followups.push(followup)
+      })
+
+    return Array.from(map.values())
+      .map((item) => ({
+        ...item,
+        pending_bookings: item.bookings.filter((booking) => booking.status === 'reserved'),
+        completed_jobs: item.jobs.filter((job) => job.status === 'completed'),
+        pending: item.followups.length,
+      }))
+      .sort((a, b) => String(b.latest_at).localeCompare(String(a.latest_at)))
+  })()
+
   const pageTitle =
-    activeTab === 'home'
-      ? 'Dashboard'
-      : activeTab === 'inventory'
-        ? 'Inventory'
-        : activeTab === 'operations'
-          ? 'Operations'
-          : activeTab === 'jobs'
-            ? 'Jobs & Invoices'
-            : activeTab === 'holders'
-              ? 'Stock Holders'
-              : activeTab === 'activity'
-                ? 'Activity'
-                : activeTab === 'more'
-                  ? 'Account & Settings'
-                  : activeTab === 'users'
-                    ? 'User Access'
-                    : activeTab === 'settings'
-                      ? 'Inventory Settings'
-                      : 'Stock Count'
+    activeTab === 'home' ? 'Dashboard'
+      : activeTab === 'technician' ? 'My Work'
+      : activeTab === 'crm' ? 'CRM Leads'
+      : activeTab === 'operations' ? 'Operations'
+      : activeTab === 'customers' ? 'Customers'
+      : activeTab === 'products' ? 'Edit Items'
+      : activeTab === 'jobs' ? 'Jobs & Invoices'
+      : activeTab === 'more' ? 'Account & Settings'
+      : activeTab === 'users' ? 'User Access'
+      : 'SVR CRM & Operations'
 
   return (
     <div className="app-layout">
@@ -2921,8 +3466,8 @@ function App() {
         <div className="sidebar-brand">
           <div className="brand-mark">SVR</div>
           <div>
-            <strong>SVR Inventory</strong>
-            <span>Stock Management</span>
+            <strong>SVR CRM & Operations</strong>
+            <span>Sales • Installation • After Sales</span>
           </div>
         </div>
 
@@ -2940,12 +3485,12 @@ function App() {
         </nav>
 
         <div className="sidebar-bottom">
-          {canManageInventory && (
-            <button className="count-shortcut" onClick={openStockCount}>
-              <ClipboardList size={18} />
+          {isManagement && (
+            <button className="count-shortcut item-shortcut" onClick={() => setActiveTab('products')}>
+              <Boxes size={18} />
               <div>
-                <strong>Stock Count</strong>
-                <span>Physical adjustment</span>
+                <strong>Edit Items</strong>
+                <span>Smart locks + lock body reference list</span>
               </div>
             </button>
           )}
@@ -2968,7 +3513,7 @@ function App() {
       <div className="app-main">
         <header className="app-header">
           <div>
-            <p className="kicker">SVR INVENTORY</p>
+            <p className="kicker">SVR CRM & OPERATIONS</p>
             <h1>{pageTitle}</h1>
           </div>
 
@@ -3015,40 +3560,45 @@ function App() {
           </div>
         </header>
 
-        <main
-          className={
-            activeTab === 'stockCount'
-              ? 'page-content count-page-content'
-              : 'page-content'
-          }
-        >
+        <main className="page-content">
           {dataError && (
             <div className="global-error">{dataError}</div>
           )}
 
           {activeTab === 'home' && (
-            <Dashboard
-              totals={totals}
-              inventory={visibleInventory}
-              movements={visibleMovements}
+            <CrmOpsDashboard
+              leads={crmLeads}
               reservations={visibleReservations}
               jobs={visibleJobs}
               followups={followups}
-              productDisplayName={productDisplayName}
-              productById={productById}
-              movementTitle={movementTitle}
-              movementSubtitle={movementSubtitle}
-              formatDate={formatDate}
               setActiveTab={setActiveTab}
-              setMobileActionsOpen={setMobileActionsOpen}
-              openStockCount={openStockCount}
+              setOperationsView={setOperationsView}
+              openNewLead={openNewLead}
+              openNewBooking={openNewBooking}
               currentRole={currentRole}
-              profile={profile}
-              locationById={locationById}
+              setLeadStatusFilter={setLeadStatusFilter}
             />
           )}
 
-          {activeTab === 'inventory' && (
+          {activeTab === 'technician' && isTechnician && (
+            <TechnicianMyWorkV76
+              bookings={visibleReservations}
+              jobs={visibleJobs}
+              followups={followups}
+              leaves={technicianLeaves}
+              profile={profile}
+              productById={productById}
+              productDisplayName={productDisplayName}
+              jobPhotos={jobPhotos}
+              openLeaveRequest={openLeaveRequest}
+              openCompleteInstallation={openCompleteInstallation}
+              openEditCompletedJob={openEditCompletedJob}
+              setActiveTab={setActiveTab}
+              setOperationsView={setOperationsView}
+            />
+          )}
+
+          {activeTab === 'legacyInventory' && (
             inventoryDetailItem ? (
               <InventoryItemDetail
                 key={inventoryDetailItem.product_id}
@@ -3083,6 +3633,33 @@ function App() {
             )
           )}
 
+          {activeTab === 'crm' && isManagement && (
+            <CRMLeadsPage
+              leads={crmLeads}
+              notes={crmLeadNotes}
+              filter={leadStatusFilter}
+              setFilter={setLeadStatusFilter}
+              openNewLead={openNewLead}
+              openLeadDetail={openLeadDetail}
+              convertToBooking={convertLeadToBooking}
+            />
+          )}
+
+          {activeTab === 'customers' && isManagement && (
+            <CustomersPage
+              customers={customerRecords}
+              openCustomer={setCustomerDetail}
+            />
+          )}
+
+          {activeTab === 'products' && isManagement && (
+            <ProductCatalogPage
+              products={productCatalog}
+              openProductEditor={openProductEditor}
+              productDisplayName={productDisplayName}
+            />
+          )}
+
           {activeTab === 'operations' && (
             <OperationsPage
               bookings={visibleReservations}
@@ -3106,6 +3683,12 @@ function App() {
               canCompleteJobs={canCompleteJobs}
               acknowledgeBookingNote={acknowledgeBookingNote}
               profileByUserId={profileByUserId}
+              technicianLeaves={technicianLeaves}
+              openLeaveRequest={openLeaveRequest}
+              decideLeave={decideLeave}
+              cancelLeave={cancelLeave}
+              openEditCompletedJob={openEditCompletedJob}
+              jobPhotos={jobPhotos}
             />
           )}
 
@@ -3147,10 +3730,11 @@ function App() {
               jobPhotos={jobPhotos}
               followups={followups}
               openFollowup={openFollowup}
+              openEditCompletedJob={openEditCompletedJob}
             />
           )}
 
-          {activeTab === 'holders' && (
+          {activeTab === 'legacyHolders' && (
             <HoldersPage
               holderSummary={holderSummary}
               setSelectedLocationId={setSelectedLocationId}
@@ -3158,7 +3742,7 @@ function App() {
             />
           )}
 
-          {activeTab === 'activity' && (
+          {activeTab === 'legacyActivity' && (
             <ActivityPage
               movements={visibleMovements}
               movementTitle={movementTitle}
@@ -3170,17 +3754,15 @@ function App() {
           )}
 
           {activeTab === 'more' && (
-            <MorePage
+            <MorePageV7
               email={session.user.email}
               profile={profile}
               formatRole={formatRole}
               onLogout={handleLogout}
-              openStockCount={openStockCount}
               setActiveTab={setActiveTab}
-              canManageInventory={canManageInventory}
               canViewUserAccess={canViewUserAccess}
               openPasswordChange={openPasswordChange}
-              openInventorySettings={openInventorySettings}
+              isManagement={isManagement}
             />
           )}
 
@@ -3195,7 +3777,7 @@ function App() {
             />
           )}
 
-          {activeTab === 'settings' && isManagement && (
+          {activeTab === 'legacySettings' && isManagement && (
             <InventorySettingsPage
               products={productCatalog}
               locations={allLocations}
@@ -3207,196 +3789,51 @@ function App() {
             />
           )}
 
-          {activeTab === 'stockCount' && (
-            <StockCountPage
-              locations={locations}
-              selectedLocationId={selectedLocationId}
-              selectedLocation={selectedLocation}
-              handleLocationChange={handleLocationChange}
-              stockCountCategory={stockCountCategory}
-              setStockCountCategory={setStockCountCategory}
-              stockCountProducts={stockCountProducts}
-              stockCountLoading={stockCountLoading}
-              holderStock={holderStock}
-              stockCountValues={stockCountValues}
-              adjustStockCount={adjustStockCount}
-              updateStockCount={updateStockCount}
-              productDisplayName={productDisplayName}
-              stockCountChanges={stockCountChanges}
-              stockCountSaving={stockCountSaving}
-              saveStockCount={saveStockCount}
-              stockCountMessage={stockCountMessage}
-              stockCountError={stockCountError}
-              goBack={goBackInApp}
-            />
-          )}
         </main>
       </div>
 
-      {activeTab !== 'stockCount' && (
-        <nav className="mobile-nav">
-          <button
-            className={activeTab === 'home' ? 'active' : ''}
-            onClick={() => setActiveTab('home')}
-          >
-            <Home size={19} />
-            <span>Home</span>
+      <nav className="mobile-nav">
+        <button className={activeTab === 'home' ? 'active' : ''} onClick={() => setActiveTab('home')}>
+          <Home size={19} /><span>Home</span>
+        </button>
+        {isManagement ? (
+          <button className={activeTab === 'crm' ? 'active' : ''} onClick={() => setActiveTab('crm')}>
+            <MessageCircle size={19} /><span>CRM</span>
           </button>
-
-          <button
-            className={activeTab === 'inventory' ? 'active' : ''}
-            onClick={() => setActiveTab('inventory')}
-          >
-            <Boxes size={19} />
-            <span>Stock</span>
+        ) : isTechnician ? (
+          <button className={activeTab === 'technician' ? 'active' : ''} onClick={() => setActiveTab('technician')}>
+            <Wrench size={19} /><span>My Work</span>
           </button>
-
-          {canManageInventory || canCompleteJobs ? (
-            <button
-              className="mobile-add"
-              onClick={() => setMobileActionsOpen(true)}
-            >
-              <span>+</span>
-            </button>
-          ) : (
-            <div className="mobile-nav-spacer" />
-          )}
-
-          {(isManagement || isTechnician) ? (
-            <button
-              className={activeTab === 'operations' ? 'active' : ''}
-              onClick={() => {
-                if (isTechnician) setOperationsView('today')
-                setActiveTab('operations')
-              }}
-            >
-              <CalendarDays size={19} />
-              <span>Ops</span>
-            </button>
-          ) : (
-            <button
-              className={activeTab === 'jobs' ? 'active' : ''}
-              onClick={() => setActiveTab('jobs')}
-            >
-              <FileText size={19} />
-              <span>Jobs</span>
-            </button>
-          )}
-
-          {(isManagement || isTechnician) ? (
-            <button
-              className={activeTab === 'jobs' ? 'active' : ''}
-              onClick={() => setActiveTab('jobs')}
-            >
-              <FileText size={19} />
-              <span>Jobs</span>
-            </button>
-          ) : (
-            <button
-              className={activeTab === 'more' ? 'active' : ''}
-              onClick={() => setActiveTab('more')}
-            >
-              <Menu size={19} />
-              <span>More</span>
-            </button>
-          )}
-        </nav>
-      )}
+        ) : <div className="mobile-nav-spacer" />}
+        {(isManagement || isTechnician) ? (
+          <button className="mobile-add" onClick={() => setMobileActionsOpen(true)}><span>+</span></button>
+        ) : <div className="mobile-nav-spacer" />}
+        {(isManagement || isTechnician) ? (
+          <button className={activeTab === 'operations' ? 'active' : ''} onClick={() => { setOperationsView(isTechnician ? 'today' : 'calendar'); setActiveTab('operations') }}>
+            <CalendarDays size={19} /><span>Ops</span>
+          </button>
+        ) : <div className="mobile-nav-spacer" />}
+        {isManagement ? (
+          <button className={activeTab === 'customers' ? 'active' : ''} onClick={() => setActiveTab('customers')}>
+            <Users size={19} /><span>Customers</span>
+          </button>
+        ) : (
+          <button className={activeTab === 'more' ? 'active' : ''} onClick={() => setActiveTab('more')}>
+            <Menu size={19} /><span>More</span>
+          </button>
+        )}
+      </nav>
 
       {mobileActionsOpen && (
-        <div
-          className="sheet-backdrop"
-          onClick={() => setMobileActionsOpen(false)}
-        >
-          <div
-            className="action-sheet"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="sheet-backdrop" onClick={() => setMobileActionsOpen(false)}>
+          <div className="action-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="sheet-handle" />
-            <div className="sheet-title">
-              <div>
-                <p className="kicker">QUICK ACTION</p>
-                <h3>What do you want to do?</h3>
-              </div>
-              <button
-                className="icon-button"
-                onClick={() => setMobileActionsOpen(false)}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {isManagement && (
-              <button className="sheet-action" onClick={openNewBooking}>
-                <div className="action-icon dark"><CalendarDays size={20} /></div>
-                <div>
-                  <strong>New Booking</strong>
-                  <span>Promotion booking, reservation or scheduled install</span>
-                </div>
-                <ChevronRight size={18} />
-              </button>
-            )}
-
-            {canManageInventory && (
-              <>
-                <button
-                  className="sheet-action"
-                  onClick={() => openAction('stock_in')}
-                >
-                  <div className="action-icon">
-                    <ArrowDownToLine size={20} />
-                  </div>
-                  <div>
-                    <strong>Stock In</strong>
-                    <span>Receive stock from supplier</span>
-                  </div>
-                  <ChevronRight size={18} />
-                </button>
-
-                <button
-                  className="sheet-action"
-                  onClick={() => openAction('transfer')}
-                >
-                  <div className="action-icon">
-                    <ArrowRightLeft size={20} />
-                  </div>
-                  <div>
-                    <strong>Transfer</strong>
-                    <span>Move stock to technician or agent</span>
-                  </div>
-                  <ChevronRight size={18} />
-                </button>
-              </>
-            )}
-
-            {canManageInventory && (
-              <>
-                <button
-                  className="sheet-action"
-                  onClick={() => openAction('stock_out')}
-                >
-                  <div className="action-icon">
-                    <PackageMinus size={20} />
-                  </div>
-                  <div>
-                    <strong>Stock Out</strong>
-                    <span>Manual / exceptional stock usage</span>
-                  </div>
-                  <ChevronRight size={18} />
-                </button>
-
-                <button className="sheet-action" onClick={openStockCount}>
-                  <div className="action-icon dark">
-                    <ClipboardList size={20} />
-                  </div>
-                  <div>
-                    <strong>Stock Count</strong>
-                    <span>Set or correct physical stock</span>
-                  </div>
-                  <ChevronRight size={18} />
-                </button>
-              </>
-            )}
+            <div className="sheet-title"><div><p className="kicker">QUICK ACTION</p><h3>What do you want to do?</h3></div><button className="icon-button" onClick={() => setMobileActionsOpen(false)}><X size={18} /></button></div>
+            {isManagement && <button className="sheet-action" onClick={openNewLead}><div className="action-icon"><MessageCircle size={20} /></div><div><strong>New Lead</strong><span>Add a new enquiry / follow-up</span></div><ChevronRight size={18} /></button>}
+            {isManagement && <button className="sheet-action" onClick={openNewCustomer}><div className="action-icon"><Users size={20} /></div><div><strong>Add Customer</strong><span>Direct confirmed order • choose smart lock and payment</span></div><ChevronRight size={18} /></button>}
+            {isManagement && <button className="sheet-action" onClick={openNewBooking}><div className="action-icon dark"><CalendarDays size={20} /></div><div><strong>New Booking</strong><span>Deposit, TBC, estimated or scheduled installation</span></div><ChevronRight size={18} /></button>}
+            {isTechnician && <button className="sheet-action" onClick={openLeaveRequest}><div className="action-icon"><CalendarRange size={20} /></div><div><strong>Apply Leave</strong><span>Request full-day or time-range leave</span></div><ChevronRight size={18} /></button>}
+            <button className="sheet-action" onClick={() => { setMobileActionsOpen(false); setActiveTab('operations'); setOperationsView('pending') }}><div className="action-icon"><AlertTriangle size={20} /></div><div><strong>Pending Settle</strong><span>Open after-sales / unfinished installation cases</span></div><ChevronRight size={18} /></button>
           </div>
         </div>
       )}
@@ -3475,7 +3912,7 @@ function App() {
           setQuery={setGlobalSearch}
           reservations={visibleReservations}
           jobs={visibleJobs}
-          inventory={visibleInventory}
+          inventory={isManagement ? productCatalog.map((item) => ({ ...item, product_id: item.id })) : []}
           productById={productById}
           productDisplayName={productDisplayName}
           close={() => {
@@ -3539,12 +3976,58 @@ function App() {
         />
       )}
 
+      {leadEditor && (
+        <LeadEditorModal
+          editor={leadEditor}
+          form={leadForm}
+          setForm={setLeadForm}
+          saving={leadSaving}
+          error={leadError}
+          close={() => !leadSaving && setLeadEditor(null)}
+          save={saveLeadV7}
+        />
+      )}
+
+      {leadDetail && (
+        <LeadDetailModal
+          lead={leadDetail}
+          notes={crmLeadNotes}
+          profiles={profiles}
+          form={leadUpdateForm}
+          setForm={setLeadUpdateForm}
+          saving={leadUpdateSaving}
+          error={leadUpdateError}
+          close={() => !leadUpdateSaving && setLeadDetail(null)}
+          editLead={openEditLeadFromDetail}
+          saveUpdate={saveLeadUpdate}
+          convertToBooking={convertLeadToBooking}
+        />
+      )}
+
+      {customerDetail && (
+        <CustomerDetailModal
+          customer={customerDetail}
+          productById={productById}
+          productDisplayName={productDisplayName}
+          locationById={locationById}
+          close={() => setCustomerDetail(null)}
+          editBooking={(booking) => {
+            setCustomerDetail(null)
+            openEditBooking(booking)
+          }}
+          openPendingCase={(followup) => {
+            setCustomerDetail(null)
+            openFollowup(followup, 'schedule')
+          }}
+        />
+      )}
+
       {bookingEditor && (
         <BookingV6Modal
           editor={bookingEditor}
           form={bookingForm}
           items={bookingItems}
-          products={productCatalog.filter((item) => item.active !== false)}
+          products={productCatalog.filter((item) => item.active !== false && item.category === 'smart_lock')}
           locations={locations}
           saving={bookingSaving}
           error={bookingError}
@@ -3554,19 +4037,7 @@ function App() {
           removeItem={removeBookingItem}
           close={() => !bookingSaving && setBookingEditor(null)}
           save={saveBookingV6}
-        />
-      )}
-
-      {handoverBooking && (
-        <HandoverV6Modal
-          booking={handoverBooking}
-          form={handoverForm}
-          setForm={setHandoverForm}
-          locations={locations}
-          saving={handoverSaving}
-          error={handoverError}
-          close={() => !handoverSaving && setHandoverBooking(null)}
-          save={saveHandover}
+          technicianLeaves={technicianLeaves}
         />
       )}
 
@@ -3577,6 +4048,13 @@ function App() {
           setForm={setCompletionForm}
           files={completionFiles}
           setFiles={setCompletionFiles}
+          lockBodyItems={completionLockBodies}
+          lockBodyProducts={productCatalog.filter((item) => item.active !== false && item.category === 'lock_body')}
+          updateLockBody={updateCompletionLockBody}
+          addLockBody={addCompletionLockBody}
+          removeLockBody={removeCompletionLockBody}
+          productById={productById}
+          productDisplayName={productDisplayName}
           locations={allowedJobLocations}
           saving={completionSaving}
           error={completionError}
@@ -3595,6 +4073,40 @@ function App() {
           error={followupError}
           close={() => !followupSaving && setFollowupEditor(null)}
           save={saveFollowup}
+          technicianLeaves={technicianLeaves}
+        />
+      )}
+
+      {leaveEditor && (
+        <LeaveRequestModalV75
+          form={leaveForm}
+          setForm={setLeaveForm}
+          saving={leaveSaving}
+          error={leaveError}
+          close={() => !leaveSaving && setLeaveEditor(false)}
+          save={saveLeaveRequest}
+        />
+      )}
+
+      {completedEditJob && (
+        <EditCompletedJobModalV75
+          job={completedEditJob}
+          form={completedEditForm}
+          setForm={setCompletedEditForm}
+          files={completedEditFiles}
+          setFiles={setCompletedEditFiles}
+          lockBodyItems={completedEditLockBodies}
+          lockBodyProducts={productCatalog.filter((item) => item.category === 'lock_body')}
+          updateLockBody={updateCompletedEditLockBody}
+          addLockBody={addCompletedEditLockBody}
+          removeLockBody={removeCompletedEditLockBody}
+          productById={productById}
+          productDisplayName={productDisplayName}
+          existingPhotos={jobPhotos.filter((photo) => photo.job_id === completedEditJob.id)}
+          saving={completedEditSaving}
+          error={completedEditError}
+          close={() => !completedEditSaving && setCompletedEditJob(null)}
+          save={saveCompletedJobEdit}
         />
       )}
 
@@ -3964,6 +4476,1526 @@ function ActionModal({
 
 
 
+function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, setOperationsView, openNewLead, openNewBooking, currentRole, setLeadStatusFilter }) {
+  const today = formatLocalDateKey(new Date())
+  const newLeads = leads.filter((lead) => lead.status === 'new')
+  const followUpLeads = leads.filter((lead) => lead.status === 'follow_up')
+  const highImportantLeads = leads.filter((lead) => lead.status === 'high_important')
+  const activeLeads = leads.filter((lead) => !['done', 'loss'].includes(lead.status))
+  const installsToday = reservations.filter((item) => item.status === 'reserved' && item.schedule_type === 'exact' && item.installation_date === today)
+  const pendingSchedule = reservations.filter((item) => item.status === 'reserved' && ['tbc', 'estimated'].includes(item.schedule_type))
+  const pendingSettle = followups.filter((item) => ['pending', 'scheduled'].includes(item.status))
+  const notInvoiced = jobs.filter((item) => item.status === 'completed' && item.invoice_status === 'not_invoiced')
+  const isManagementUser = ['owner', 'admin'].includes(currentRole)
+
+  return (
+    <div className="page-stack fade-in v7-dashboard">
+      <section className="v7-welcome">
+        <div>
+          <p className="kicker">SVR DAILY CONTROL</p>
+          <h2>CRM & Operations</h2>
+          <p>Follow up leads, arrange technician jobs and clear pending cases.</p>
+        </div>
+        {isManagementUser && (
+          <div className="v7-welcome-actions">
+            <button className="secondary-button" onClick={openNewLead}><Plus size={15} /> Lead</button>
+            <button className="primary-button" onClick={openNewBooking}><Plus size={15} /> Booking</button>
+          </div>
+        )}
+      </section>
+
+      <section className="v7-kpi-grid">
+        {isManagementUser && (
+          <button onClick={() => { setLeadStatusFilter('new'); setActiveTab('crm') }}>
+            <span>Active Leads</span>
+            <strong>{activeLeads.length}</strong>
+            <small>{newLeads.length} new • {highImportantLeads.length} important</small>
+          </button>
+        )}
+        <button onClick={() => { setOperationsView('today'); setActiveTab('operations') }}>
+          <span>Install Today</span>
+          <strong>{installsToday.length}</strong>
+          <small>Today schedule</small>
+        </button>
+        <button onClick={() => { setOperationsView('scheduled'); setActiveTab('operations') }}>
+          <span>Pending Schedule</span>
+          <strong>{pendingSchedule.length}</strong>
+          <small>TBC / estimated</small>
+        </button>
+        <button onClick={() => { setOperationsView('pending'); setActiveTab('operations') }}>
+          <span>Pending Settle</span>
+          <strong>{pendingSettle.length}</strong>
+          <small>Need action</small>
+        </button>
+      </section>
+
+      <section className="surface-card v7-attention">
+        <div className="section-title-row">
+          <div><p className="kicker">NEEDS ATTENTION</p><h3>What needs action</h3></div>
+        </div>
+
+        {isManagementUser && highImportantLeads.length > 0 && (
+          <button onClick={() => { setLeadStatusFilter('high_important'); setActiveTab('crm') }}>
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{highImportantLeads.length} high important lead(s)</strong>
+              <span>Open CRM and handle these first</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
+        {isManagementUser && followUpLeads.length > 0 && (
+          <button onClick={() => { setLeadStatusFilter('follow_up'); setActiveTab('crm') }}>
+            <MessageCircle size={16} />
+            <div>
+              <strong>{followUpLeads.length} lead(s) in Follow Up</strong>
+              <span>Review the latest update log and continue the conversation</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
+        {pendingSettle.length > 0 && (
+          <button onClick={() => { setOperationsView('pending'); setActiveTab('operations') }}>
+            <Wrench size={16} />
+            <div>
+              <strong>{pendingSettle.length} pending settle case(s)</strong>
+              <span>Schedule or resolve after-sales work</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
+        {notInvoiced.length > 0 && isManagementUser && (
+          <button onClick={() => setActiveTab('jobs')}>
+            <ReceiptText size={16} />
+            <div>
+              <strong>{notInvoiced.length} completed job(s) not invoiced</strong>
+              <span>Review Jobs & Invoices</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
+        {highImportantLeads.length === 0 && followUpLeads.length === 0 && pendingSettle.length === 0 && (!isManagementUser || notInvoiced.length === 0) && (
+          <div className="v7-clear"><CheckCircle2 size={18} /> Nothing urgent right now</div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+const CRM_STATUS_LABELS = {
+  new: 'New',
+  follow_up: 'Follow Up',
+  high_important: 'High Important',
+  done: 'Done',
+  loss: 'Loss',
+}
+
+const CRM_STATUS_ORDER = ['new', 'follow_up', 'high_important', 'done', 'loss']
+
+const CRM_REGION_OPTIONS = [
+  { value: 'jb', label: 'JB' },
+  { value: 'kl', label: 'KL' },
+  { value: 'mlk', label: 'MLK' },
+  { value: 'penang', label: 'Penang' },
+  { value: 'muar', label: 'Muar' },
+  { value: 'kluang', label: 'Kluang' },
+  { value: 'batu_pahat', label: 'Batu Pahat' },
+  { value: 'others', label: 'Others' },
+  { value: 'not_covered', label: 'Not Covered' },
+  { value: 'unassigned', label: 'Unassigned' },
+]
+
+function crmRegionLabel(lead) {
+  if (!lead) return ''
+  if (lead.region_code === 'others') return lead.region_other || 'Others'
+  return CRM_REGION_OPTIONS.find((item) => item.value === lead.region_code)?.label || ''
+}
+
+function crmLeadLocationText(lead) {
+  if (!lead) return ''
+  const region = crmRegionLabel(lead)
+  const area = (lead.area || '').trim()
+  if (region && area && region.toLowerCase() !== area.toLowerCase()) return `${region} • ${area}`
+  return area || region
+}
+
+function crmDisplayDate(value, withTime = false) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('en-MY', withTime
+    ? { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { day: '2-digit', month: 'short', year: 'numeric' }
+  ).format(date)
+}
+
+function CRMLeadsPage({
+  leads,
+  notes,
+  filter,
+  setFilter,
+  openNewLead,
+  openLeadDetail,
+  convertToBooking,
+}) {
+  const [search, setSearch] = useState('')
+  const [regionFilter, setRegionFilter] = useState('all')
+  const normalized = search.trim().toLowerCase()
+
+  const counts = CRM_STATUS_ORDER.reduce((result, status) => {
+    result[status] = leads.filter((lead) => lead.status === status).length
+    return result
+  }, {})
+
+  const filtered = leads.filter((lead) => {
+    if (lead.status !== filter) return false
+    if (regionFilter !== 'all' && (lead.region_code || 'unassigned') !== regionFilter) return false
+    if (!normalized) return true
+    const latest = notes.find((note) => note.lead_id === lead.id)?.note || ''
+    return `${lead.customer_name || ''} ${lead.phone || ''} ${crmLeadLocationText(lead)} ${lead.source || ''} ${lead.interest_text || ''} ${latest}`
+      .toLowerCase()
+      .includes(normalized)
+  })
+
+  const latestNote = (leadId) => notes.find((note) => note.lead_id === leadId)
+
+  return (
+    <div className="page-stack fade-in crm-page">
+      <section className="crm-head crm-head-v72">
+        <div>
+          <p className="kicker">SALES FOLLOW-UP</p>
+          <h2>CRM Leads</h2>
+          <p>See the status first, then continue from the latest update log.</p>
+        </div>
+        <button className="primary-button" onClick={openNewLead}>
+          <Plus size={15} /> New Lead
+        </button>
+      </section>
+
+      <div className="crm-status-board v72">
+        {CRM_STATUS_ORDER.map((status) => (
+          <button
+            type="button"
+            key={status}
+            className={`crm-status-tab ${status} ${filter === status ? 'active' : ''}`}
+            onClick={() => setFilter(status)}
+          >
+            <span>{CRM_STATUS_LABELS[status]}</span>
+            <strong>{counts[status] || 0}</strong>
+          </button>
+        ))}
+      </div>
+
+      <div className="crm-filter-toolbar">
+        <div className="crm-region-filter">
+          <MapPin size={15} />
+          <select value={regionFilter} onChange={(event) => setRegionFilter(event.target.value)}>
+            <option value="all">All Regions</option>
+            {CRM_REGION_OPTIONS.map((region) => (
+              <option key={region.value} value={region.value}>{region.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="crm-search-v71">
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search name, phone, area, model or update..."
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch('')} aria-label="Clear search">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <section className="crm-list">
+        {filtered.map((lead) => {
+          const note = latestNote(lead.id)
+          const leadDate = lead.lead_date || lead.created_at
+          return (
+            <article
+              className={`crm-lead-card v72 ${lead.status}`}
+              key={lead.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => openLeadDetail(lead)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') openLeadDetail(lead)
+              }}
+            >
+              <div className="crm-lead-top">
+                <div className="crm-lead-title-block">
+                  <div className="crm-card-meta-row">
+                    <span className={`crm-status ${lead.status}`}>
+                      {CRM_STATUS_LABELS[lead.status] || lead.status}
+                    </span>
+                    <span className="crm-lead-date">Lead • {crmDisplayDate(leadDate)}</span>
+                  </div>
+                  <h3>{lead.customer_name || lead.phone || 'New Lead'}</h3>
+                  <p>
+                    {lead.phone || 'No phone'}
+                    {crmLeadLocationText(lead) ? ` • ${crmLeadLocationText(lead)}` : ''}
+                    {lead.source ? ` • ${lead.source}` : ''}
+                  </p>
+                </div>
+                <ChevronRight className="crm-card-chevron" size={18} />
+              </div>
+
+              {lead.interest_text && <p className="crm-interest">{lead.interest_text}</p>}
+
+              {note?.note ? (
+                <div className="crm-latest-note v72">
+                  <div>
+                    <span>LATEST UPDATE</span>
+                    <time>{crmDisplayDate(note.created_at, true)}</time>
+                  </div>
+                  <p>{note.note}</p>
+                </div>
+              ) : (
+                <div className="crm-no-update">No follow-up update yet.</div>
+              )}
+
+              <div className="crm-card-quick-actions">
+                {lead.phone && (
+                  <a href={`tel:${lead.phone}`} onClick={(event) => event.stopPropagation()}>
+                    <Phone size={14} /> Call
+                  </a>
+                )}
+                {whatsappUrl(lead.phone) && (
+                  <a href={whatsappUrl(lead.phone)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+                    <MessageCircle size={14} /> WhatsApp
+                  </a>
+                )}
+                <span>Tap card to update</span>
+              </div>
+            </article>
+          )
+        })}
+
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            <MessageCircle size={24} />
+            <strong>No {CRM_STATUS_LABELS[filter]} leads</strong>
+            <span>Try another status or region. Use the + button below to add a lead.</span>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function LeadEditorModal({ editor, form, setForm, saving, error, close, save }) {
+  const update = (field, value) => setForm((current) => ({ ...current, [field]: value }))
+  const editableStatuses = CRM_STATUS_ORDER.filter((status) => status !== 'done')
+  const convertedDone = form.status === 'done'
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal lead-editor-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="transaction-modal-head">
+          <div>
+            <p className="kicker">CRM LEAD</p>
+            <h2>{editor.type === 'new' ? 'New Lead' : 'Edit Lead'}</h2>
+            <p>Lead date defaults to today. Region and area are kept separate for easier follow-up filtering.</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="transaction-scroll">
+          <div className="transaction-two-col">
+            <div className="transaction-field">
+              <label>Customer Name</label>
+              <input value={form.customer_name} onChange={(event) => update('customer_name', event.target.value)} />
+            </div>
+            <div className="transaction-field">
+              <label>Phone / WhatsApp</label>
+              <input value={form.phone} onChange={(event) => update('phone', event.target.value)} />
+            </div>
+          </div>
+
+          <div className="transaction-two-col">
+            <div className="transaction-field">
+              <label>Lead Date *</label>
+              <input type="date" value={form.lead_date} onChange={(event) => update('lead_date', event.target.value)} />
+              <small className="field-help">WhatsApp auto-leads can use the incoming message date later.</small>
+            </div>
+            <div className="transaction-field">
+              <label>Status</label>
+              {convertedDone ? (
+                <>
+                  <input value="Done • Converted Customer" disabled />
+                  <small className="field-help">Done is locked because this lead has already become a customer.</small>
+                </>
+              ) : (
+                <select value={form.status} onChange={(event) => update('status', event.target.value)}>
+                  {editableStatuses.map((status) => (
+                    <option key={status} value={status}>{CRM_STATUS_LABELS[status]}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+          </div>
+
+          <div className="transaction-two-col lead-region-row">
+            <div className="transaction-field">
+              <label>Region</label>
+              <select value={form.region_code || 'unassigned'} onChange={(event) => update('region_code', event.target.value)}>
+                {CRM_REGION_OPTIONS.map((region) => (
+                  <option key={region.value} value={region.value}>{region.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="transaction-field">
+              <label>Area / Township</label>
+              <input value={form.area} onChange={(event) => update('area', event.target.value)} placeholder="Mount Austin / Cheras / Bayan Lepas..." />
+            </div>
+          </div>
+
+          {form.region_code === 'others' && (
+            <div className="transaction-field">
+              <label>Other Region</label>
+              <input value={form.region_other} onChange={(event) => update('region_other', event.target.value)} placeholder="e.g. Seremban / Ipoh" />
+            </div>
+          )}
+
+          {form.region_code === 'not_covered' && (
+            <div className="crm-coverage-note">Not Covered is for enquiries outside the current Johor / Melaka / KL / Penang coverage.</div>
+          )}
+
+          <div className="transaction-two-col">
+            <div className="transaction-field">
+              <label>Source</label>
+              <select value={form.source} onChange={(event) => update('source', event.target.value)}>
+                {['WhatsApp', 'Facebook', 'Instagram', 'Xiaohongshu', 'Referral', 'Walk-in', 'Agent', 'Other'].map((source) => (
+                  <option key={source}>{source}</option>
+                ))}
+              </select>
+            </div>
+            <div className="transaction-field lead-status-guide">
+              <label>Done means Customer</label>
+              <div>To mark a lead Done, open the lead and choose <strong>Done</strong>. The app will take you straight to Customer / Booking details.</div>
+            </div>
+          </div>
+
+          <div className="transaction-field">
+            <label>Interested In / Requirement</label>
+            <textarea rows="3" value={form.interest_text} onChange={(event) => update('interest_text', event.target.value)} placeholder="e.g. Wooden door + grill door, wants face recognition" />
+          </div>
+
+          <div className="transaction-field">
+            <label>General Remark</label>
+            <textarea rows="3" value={form.remark} onChange={(event) => update('remark', event.target.value)} placeholder="Permanent note about this lead..." />
+          </div>
+
+          {error && <div className="transaction-error">{error}</div>}
+        </div>
+
+        <div className="transaction-footer">
+          <button className="secondary-button" onClick={close}>Cancel</button>
+          <button className="primary-button" onClick={save} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Lead'}
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function LeadDetailModal({
+  lead,
+  notes,
+  profiles,
+  form,
+  setForm,
+  saving,
+  error,
+  close,
+  editLead,
+  saveUpdate,
+  convertToBooking,
+}) {
+  const orderedNotes = [...notes]
+    .filter((note) => note.lead_id === lead.id)
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+
+  const authorName = (userId) =>
+    profiles.find((profile) => profile.user_id === userId)?.display_name || 'SVR'
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal lead-detail-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="lead-detail-head">
+          <div>
+            <div className="crm-card-meta-row">
+              <span className={`crm-status ${lead.status}`}>{CRM_STATUS_LABELS[lead.status] || lead.status}</span>
+              <span className="crm-lead-date">Lead • {crmDisplayDate(lead.lead_date || lead.created_at)}</span>
+            </div>
+            <h2>{lead.customer_name || lead.phone || 'Lead'}</h2>
+            <p>
+              {lead.phone || 'No phone'}
+              {crmLeadLocationText(lead) ? ` • ${crmLeadLocationText(lead)}` : ''}
+              {lead.source ? ` • ${lead.source}` : ''}
+            </p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="lead-detail-contact-actions">
+          {lead.phone && <a href={`tel:${lead.phone}`}><Phone size={15} /> Call</a>}
+          {whatsappUrl(lead.phone) && (
+            <a href={whatsappUrl(lead.phone)} target="_blank" rel="noreferrer"><MessageCircle size={15} /> WhatsApp</a>
+          )}
+          <button type="button" onClick={() => editLead(lead)}><Pencil size={15} /> Edit Lead</button>
+        </div>
+
+        <div className="transaction-scroll lead-detail-scroll">
+          {(lead.interest_text || lead.remark) && (
+            <section className="lead-summary-card">
+              {lead.interest_text && <div><span>REQUIREMENT</span><p>{lead.interest_text}</p></div>}
+              {lead.remark && <div><span>GENERAL REMARK</span><p>{lead.remark}</p></div>}
+            </section>
+          )}
+
+          <section className="lead-update-panel">
+            <div className="lead-section-title">
+              <div><p className="kicker">FOLLOW-UP</p><h3>Add Update</h3></div>
+              <span>No follow-up time required</span>
+            </div>
+
+            <div className="crm-status-picker v72">
+              {CRM_STATUS_ORDER.map((status) => {
+                const doneNeedsConversion = status === 'done' && !lead.converted_reservation_id
+                return (
+                  <button
+                    type="button"
+                    key={status}
+                    className={`crm-status-choice ${status} ${form.status === status ? 'active' : ''}`}
+                    disabled={lead.status === 'done' && status !== 'done'}
+                    onClick={() => {
+                      if (lead.status === 'done') return
+                      if (doneNeedsConversion) {
+                        convertToBooking(lead, form.note.trim())
+                        return
+                      }
+                      setForm((current) => ({ ...current, status }))
+                    }}
+                  >
+                    {status === 'done' && !lead.converted_reservation_id ? 'Done → Customer' : CRM_STATUS_LABELS[status]}
+                  </button>
+                )
+              })}
+            </div>
+
+            {form.status === 'loss' && (
+              <div className="crm-loss-note">Use Loss for no interest, rejected quote, chose another brand, or a lead that will not proceed.</div>
+            )}
+
+            <div className="transaction-field lead-update-note">
+              <label>Update Log</label>
+              <textarea rows="3" value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} placeholder="e.g. Customer likes VN-4, waiting renovation complete. Follow up when keys are collected." />
+              <small className="field-help">Every save becomes a dated history entry. Choosing Done opens the Customer / Booking form instead.</small>
+            </div>
+
+            {error && <div className="transaction-error">{error}</div>}
+            {lead.status !== 'done' && (
+              <button className="primary-button lead-save-update" onClick={saveUpdate} disabled={saving}>
+                <Save size={15} /> {saving ? 'Saving...' : 'Save Update'}
+              </button>
+            )}
+          </section>
+
+          <section className="lead-history-section">
+            <div className="lead-section-title">
+              <div><p className="kicker">ACTIVITY</p><h3>Update History</h3></div>
+              <strong>{orderedNotes.length}</strong>
+            </div>
+
+            <div className="lead-timeline">
+              {orderedNotes.map((note) => (
+                <article className="lead-log-item" key={note.id}>
+                  <div className="lead-log-dot" />
+                  <div className="lead-log-body">
+                    <div className="lead-log-meta">
+                      <div>
+                        {note.status_after && <span className={`crm-status mini ${note.status_after}`}>{CRM_STATUS_LABELS[note.status_after] || note.status_after}</span>}
+                        <strong>{authorName(note.created_by)}</strong>
+                      </div>
+                      <time>{crmDisplayDate(note.created_at, true)}</time>
+                    </div>
+                    <p>{note.note}</p>
+                  </div>
+                </article>
+              ))}
+              {orderedNotes.length === 0 && <div className="empty-state compact"><History size={20} /><strong>No update log yet</strong></div>}
+            </div>
+          </section>
+        </div>
+
+        {!lead.converted_reservation_id && lead.status !== 'done' && (
+          <div className="transaction-footer lead-detail-footer">
+            <button className="secondary-button" onClick={close}>Close</button>
+            <button className="primary-button" onClick={() => convertToBooking(lead, form.note.trim())}>Done → Customer</button>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function customerStatusFlags(customer) {
+  const pendingInstall = (customer.pending_bookings?.length || 0) > 0
+  const pendingSettle = Number(customer.pending || 0) > 0
+  const hasCompleted = (customer.completed_jobs?.length || 0) > 0
+  const cleanCustomer = !pendingInstall && !pendingSettle
+  const completed = cleanCustomer && hasCompleted
+
+  return {
+    pending_install: pendingInstall,
+    pending_settle: pendingSettle,
+    completed,
+    customer: cleanCustomer,
+  }
+}
+
+function customerCardStatuses(customer) {
+  const flags = customerStatusFlags(customer)
+  const statuses = []
+
+  if (flags.pending_install) statuses.push({ key: 'pending_install', label: 'Pending Installation' })
+  if (flags.pending_settle) statuses.push({ key: 'pending_settle', label: 'Pending Settle' })
+
+  if (statuses.length === 0) {
+    if (flags.completed) statuses.push({ key: 'completed', label: 'Completed' })
+    else statuses.push({ key: 'customer', label: 'Customer' })
+  }
+
+  return statuses
+}
+
+function customerCardStatus(customer) {
+  return customerCardStatuses(customer)[0]
+}
+
+function CustomersPage({ customers, openCustomer }) {
+  const [q, setQ] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const normalized = q.trim().toLowerCase()
+
+  const statusCounts = customers.reduce((counts, customer) => {
+    const flags = customerStatusFlags(customer)
+    counts.all += 1
+    if (flags.customer) counts.customer += 1
+    if (flags.pending_install) counts.pending_install += 1
+    if (flags.pending_settle) counts.pending_settle += 1
+    if (flags.completed) counts.completed += 1
+    return counts
+  }, { all: 0, customer: 0, pending_install: 0, pending_settle: 0, completed: 0 })
+
+  const customerStatusOptions = [
+    ['all', 'All'],
+    ['customer', 'Customer'],
+    ['pending_install', 'Pending Installation'],
+    ['pending_settle', 'Pending Settle'],
+    ['completed', 'Completed'],
+  ]
+
+  const filtered = customers.filter((customer) => {
+    const searchable = `${customer.customer_name} ${customer.customer_phone} ${customer.area} ${customer.pending_products.join(' ')} ${customer.installed_products.join(' ')}`
+      .toLowerCase()
+    if (!searchable.includes(normalized)) return false
+    if (statusFilter === 'all') return true
+    return Boolean(customerStatusFlags(customer)[statusFilter])
+  })
+
+  return (
+    <div className="page-stack fade-in customers-page">
+      <section className="crm-head customer-head-v72">
+        <div>
+          <p className="kicker">CUSTOMER RECORD</p>
+          <h2>Customers</h2>
+          <p>Filter by installation and after-sales status, then tap a customer for the full record.</p>
+        </div>
+        <span className="customer-total">{customers.length} customers</span>
+      </section>
+
+      <section className="customer-status-board" aria-label="Customer status filters">
+        {customerStatusOptions.map(([key, label]) => (
+          <button
+            type="button"
+            key={key}
+            className={`customer-status-filter ${key} ${statusFilter === key ? 'active' : ''}`}
+            onClick={() => setStatusFilter(key)}
+          >
+            <span>{label}</span>
+            <strong>{statusCounts[key]}</strong>
+          </button>
+        ))}
+      </section>
+
+      <div className="customer-search">
+        <Search size={16} />
+        <input value={q} onChange={(event) => setQ(event.target.value)} placeholder="Search name, phone, area or smart lock..." />
+      </div>
+
+      <div className="customer-filter-result">
+        <span>{customerStatusOptions.find(([key]) => key === statusFilter)?.[1] || 'All'}</span>
+        <strong>{filtered.length}</strong>
+      </div>
+
+      <section className="customer-list customer-list-v72">
+        {filtered.map((customer) => {
+          const statuses = customerCardStatuses(customer)
+          const currentProducts = customer.pending_products.length > 0 ? customer.pending_products : customer.installed_products
+          const itemLabel = customer.pending_products.length > 0
+            ? 'TO INSTALL'
+            : customer.installed_products.length > 0
+              ? 'INSTALLED'
+              : 'CUSTOMER'
+          return (
+            <article
+              className="customer-card v72"
+              key={customer.key}
+              role="button"
+              tabIndex={0}
+              onClick={() => openCustomer(customer)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') openCustomer(customer)
+              }}
+            >
+              <div className="customer-card-top v72">
+                <div className="customer-name-block">
+                  <div className="customer-state-row">
+                    {statuses.map((status) => (
+                      <span className={`customer-state ${status.key}`} key={status.key}>{status.label}</span>
+                    ))}
+                  </div>
+                  <h3>{customer.customer_name}</h3>
+                  <p>{customer.customer_phone || 'No phone'}{customer.area ? ` • ${customer.area}` : ''}</p>
+                </div>
+                <ChevronRight className="customer-card-chevron" size={18} />
+              </div>
+
+              <div className="customer-primary-items">
+                <span>{itemLabel}</span>
+                <strong>{currentProducts.length ? currentProducts.slice(0, 5).join(' + ') : 'No smart lock record yet'}</strong>
+              </div>
+
+              {customer.pending_products.length > 0 && customer.installed_products.length > 0 && (
+                <div className="customer-secondary-items">
+                  <span>Installed</span>
+                  <strong>{customer.installed_products.slice(0, 5).join(' + ')}</strong>
+                </div>
+              )}
+
+              <div className="customer-progress-row">
+                <span><b>{customer.pending_bookings.length}</b> Pending Install</span>
+                <span><b>{customer.pending}</b> Pending Settle</span>
+                <span><b>{customer.completed_jobs.length}</b> Completed</span>
+              </div>
+
+              <div className="crm-card-quick-actions customer-quick-actions">
+                {customer.customer_phone && (
+                  <a href={`tel:${customer.customer_phone}`} onClick={(event) => event.stopPropagation()}><Phone size={14} /> Call</a>
+                )}
+                {whatsappUrl(customer.customer_phone) && (
+                  <a href={whatsappUrl(customer.customer_phone)} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}><MessageCircle size={14} /> WhatsApp</a>
+                )}
+                <span>Tap card for full record</span>
+              </div>
+            </article>
+          )
+        })}
+
+        {filtered.length === 0 && (
+          <div className="empty-state">
+            <Users size={24} />
+            <strong>No customer in this status</strong>
+            <span>Try another status or clear the search.</span>
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function CustomerDetailModal({
+  customer,
+  productById,
+  productDisplayName,
+  locationById,
+  close,
+  editBooking,
+  openPendingCase,
+}) {
+  const productNames = (rows = [], category = null, fallback = 'Product TBC') => {
+    const filtered = category
+      ? rows.filter((row) => productById(row.product_id)?.category === category)
+      : rows
+    return filtered.length
+      ? filtered.map((row) => `${productDisplayName(productById(row.product_id))}${Number(row.quantity || 1) > 1 ? ` ×${row.quantity}` : ''}`).join(' + ')
+      : fallback
+  }
+
+  const latestAddress = customer.bookings.find((booking) => booking.installation_address)?.installation_address || ''
+  const status = customerCardStatus(customer)
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal customer-detail-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="customer-detail-head">
+          <div>
+            <span className={`customer-state ${status.key}`}>{status.label}</span>
+            <h2>{customer.customer_name}</h2>
+            <p>
+              {customer.customer_phone || 'No phone'}
+              {customer.area ? ` • ${customer.area}` : ''}
+            </p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="lead-detail-contact-actions">
+          {customer.customer_phone && <a href={`tel:${customer.customer_phone}`}><Phone size={15} /> Call</a>}
+          {whatsappUrl(customer.customer_phone) && (
+            <a href={whatsappUrl(customer.customer_phone)} target="_blank" rel="noreferrer">
+              <MessageCircle size={15} /> WhatsApp
+            </a>
+          )}
+        </div>
+
+        <div className="transaction-scroll customer-detail-scroll">
+          {latestAddress && (
+            <section className="customer-address-card">
+              <MapPin size={16} />
+              <div>
+                <span>LATEST ADDRESS</span>
+                <p>{latestAddress}</p>
+              </div>
+            </section>
+          )}
+
+          <section className="customer-detail-section">
+            <div className="lead-section-title">
+              <div><p className="kicker">UPCOMING</p><h3>Pending Installation</h3></div>
+              <strong>{customer.pending_bookings.length}</strong>
+            </div>
+
+            <div className="customer-record-list">
+              {customer.pending_bookings.map((booking) => (
+                <article className="customer-record-card pending" key={booking.id}>
+                  <div className="customer-record-head">
+                    <div>
+                      <strong>{productNames(booking.reservation_items)}</strong>
+                      <span>
+                        {booking.schedule_type === 'exact'
+                          ? `${booking.installation_date || 'Date TBC'}${booking.installation_time ? ` • ${String(booking.installation_time).slice(0, 5)}` : ''}`
+                          : booking.schedule_type === 'estimated'
+                            ? `Estimated • ${booking.estimated_installation || 'TBC'}`
+                            : 'Installation TBC'}
+                      </span>
+                    </div>
+                    <span className="customer-record-badge">Pending</span>
+                  </div>
+                  {booking.installer_location_id && (
+                    <p>Technician: {locationById(booking.installer_location_id)?.name || 'Assigned'}</p>
+                  )}
+                  {booking.technician_note && <p className="customer-record-note">Important: {booking.technician_note}</p>}
+                  <button type="button" className="secondary-button small-action" onClick={() => editBooking(booking)}>
+                    <Pencil size={14} /> Edit Booking / Items
+                  </button>
+                </article>
+              ))}
+              {customer.pending_bookings.length === 0 && <div className="customer-none">No pending installation.</div>}
+            </div>
+          </section>
+
+          <section className="customer-detail-section">
+            <div className="lead-section-title">
+              <div><p className="kicker">AFTER SALES</p><h3>Pending Settle</h3></div>
+              <strong>{customer.followups.length}</strong>
+            </div>
+
+            <div className="customer-record-list">
+              {customer.followups.map((followup) => (
+                <article className="customer-record-card settle" key={followup.id}>
+                  <div className="customer-record-head">
+                    <div>
+                      <strong>{followup.issue || 'Pending settle case'}</strong>
+                      <span>
+                        {followup.status === 'scheduled'
+                          ? `Scheduled${followup.scheduled_date ? ` • ${followup.scheduled_date}` : ''}${followup.scheduled_time ? ` ${String(followup.scheduled_time).slice(0,5)}` : ''}`
+                          : 'Pending schedule'}
+                      </span>
+                    </div>
+                    <span className="customer-record-badge">Open</span>
+                  </div>
+                  {followup.remark && <p>{followup.remark}</p>}
+                  <button type="button" className="secondary-button small-action" onClick={() => openPendingCase(followup)}>
+                    <Wrench size={14} /> Update Case
+                  </button>
+                </article>
+              ))}
+              {customer.followups.length === 0 && <div className="customer-none">No pending settle case.</div>}
+            </div>
+          </section>
+
+          <section className="customer-detail-section">
+            <div className="lead-section-title">
+              <div><p className="kicker">HISTORY</p><h3>Completed Installation</h3></div>
+              <strong>{customer.completed_jobs.length}</strong>
+            </div>
+
+            <div className="customer-record-list">
+              {customer.completed_jobs.map((job) => (
+                <article className="customer-record-card done" key={job.id}>
+                  <div className="customer-record-head">
+                    <div>
+                      <strong>{productNames(job.job_items, 'smart_lock')}</strong>
+                      <span>{job.job_no || 'Completed Job'} • {crmDisplayDate(job.completed_at || job.installation_date)}</span>
+                    </div>
+                    <span className="customer-record-badge done">Done</span>
+                  </div>
+                  {productNames(job.job_items, 'lock_body', '') && (
+                    <p className="customer-lock-body-line"><Wrench size={13} /> Lock Body: {productNames(job.job_items, 'lock_body', '')}</p>
+                  )}
+                  <p>
+                    Invoice: {job.invoice_no || (job.invoice_status === 'invoiced' ? 'Invoiced' : 'Not invoiced')}
+                    {job.settlement_status === 'pending' ? ' • Pending settle' : ''}
+                  </p>
+                </article>
+              ))}
+              {customer.completed_jobs.length === 0 && <div className="customer-none">No completed installation yet.</div>}
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ProductCatalogPage({ products, openProductEditor, productDisplayName }) {
+  const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('all')
+  const normalized = search.trim().toLowerCase()
+
+  const visible = products.filter((product) => {
+    const matchesCategory = category === 'all' || product.category === category
+    const matchesSearch = !normalized || `${product.sku || ''} ${product.name || ''} ${product.app_variant || ''}`
+      .toLowerCase()
+      .includes(normalized)
+    return matchesCategory && matchesSearch
+  })
+
+  return (
+    <div className="page-stack fade-in product-catalog-page">
+      <section className="crm-head">
+        <div>
+          <p className="kicker">BOOKING ITEMS</p>
+          <h2>Edit Items</h2>
+          <p>Manage smart locks for bookings and lock bodies for technician completion updates. No stock quantity is tracked here.</p>
+        </div>
+        <button className="primary-button" onClick={() => openProductEditor()}>
+          <Plus size={15} /> Add Item
+        </button>
+      </section>
+
+      <div className="product-catalog-toolbar">
+        <div className="customer-search">
+          <Search size={16} />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search VN-4, VG-3, 6068..." />
+        </div>
+        <div className="product-catalog-filters">
+          {[
+            ['all', 'All'],
+            ['smart_lock', 'Smart Locks'],
+            ['lock_body', 'Lock Bodies'],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              className={category === value ? 'active' : ''}
+              onClick={() => setCategory(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <section className="product-catalog-list">
+        {visible.map((product) => (
+          <button
+            type="button"
+            className={`product-catalog-card ${product.active === false ? 'inactive' : ''}`}
+            key={product.id}
+            onClick={() => openProductEditor(product)}
+          >
+            <div className="product-catalog-icon">
+              {product.category === 'smart_lock' ? <Boxes size={18} /> : <Wrench size={18} />}
+            </div>
+            <div className="product-catalog-copy">
+              <div>
+                <strong>{productDisplayName(product)}</strong>
+                <span>{product.sku || 'No SKU'}</span>
+              </div>
+              <small>
+                {product.category === 'smart_lock' ? 'Smart Lock' : 'Lock Body'}
+                {product.active === false ? ' • Inactive' : ' • Active'}
+              </small>
+            </div>
+            <Pencil size={16} />
+          </button>
+        ))}
+        {visible.length === 0 && (
+          <div className="empty-state"><Boxes size={24} /><strong>No item found</strong></div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function MorePageV7({ email, profile, formatRole, onLogout, setActiveTab, canViewUserAccess, openPasswordChange, isManagement }) {
+  return (
+    <div className="page-stack fade-in more-layout">
+      <section className="profile-card">
+        <div className="profile-avatar">{(profile?.display_name || email)?.charAt(0).toUpperCase()}</div>
+        <div>
+          <p className="kicker">SIGNED IN AS</p>
+          <h2>{profile?.display_name || 'SVR User'}</h2>
+          <p>{formatRole(profile?.role)} • {email}</p>
+        </div>
+      </section>
+
+      <section className="surface-card settings-list">
+        {isManagement && (
+          <button onClick={() => setActiveTab('crm')}>
+            <div className="settings-icon"><MessageCircle size={19} /></div>
+            <div><strong>CRM Leads</strong><span>New, follow-up, important, done and loss</span></div>
+            <ChevronRight size={17} />
+          </button>
+        )}
+        <button onClick={() => setActiveTab('operations')}>
+          <div className="settings-icon"><CalendarDays size={19} /></div>
+          <div><strong>Operations</strong><span>Bookings, technician schedule and pending settle</span></div>
+          <ChevronRight size={17} />
+        </button>
+        {isManagement && (
+          <button onClick={() => setActiveTab('customers')}>
+            <div className="settings-icon"><Users size={19} /></div>
+            <div><strong>Customers</strong><span>Installation, items and after-sales history</span></div>
+            <ChevronRight size={17} />
+          </button>
+        )}
+        {isManagement && (
+          <button onClick={() => setActiveTab('products')}>
+            <div className="settings-icon"><Boxes size={19} /></div>
+            <div><strong>Edit Items</strong><span>Smart locks for jobs • lock bodies after installation</span></div>
+            <ChevronRight size={17} />
+          </button>
+        )}
+        {isManagement && (
+          <button onClick={() => setActiveTab('jobs')}>
+            <div className="settings-icon"><ReceiptText size={19} /></div>
+            <div><strong>Jobs & Invoices</strong><span>Completed installations and invoice tracking</span></div>
+            <ChevronRight size={17} />
+          </button>
+        )}
+        {canViewUserAccess && (
+          <button onClick={() => setActiveTab('users')}>
+            <div className="settings-icon"><UserCog size={19} /></div>
+            <div><strong>User Access</strong><span>Owner, Admin and Technician access</span></div>
+            <ChevronRight size={17} />
+          </button>
+        )}
+        <button type="button" onClick={openPasswordChange}>
+          <div className="settings-icon"><KeyRound size={19} /></div>
+          <div><strong>Change Password</strong><span>Update your login password</span></div>
+          <ChevronRight size={17} />
+        </button>
+        <button className="logout-setting" onClick={onLogout}>
+          <div className="settings-icon"><LogOut size={19} /></div>
+          <div><strong>Log Out</strong><span>Sign out of SVR CRM & Operations</span></div>
+          <ChevronRight size={17} />
+        </button>
+      </section>
+    </div>
+  )
+}
+
+
+
+function TechnicianMyWorkV76({
+  bookings = [],
+  jobs = [],
+  followups = [],
+  leaves = [],
+  profile,
+  productById,
+  productDisplayName,
+  jobPhotos = [],
+  openLeaveRequest,
+  openCompleteInstallation,
+  openEditCompletedJob,
+  setActiveTab,
+  setOperationsView,
+}) {
+  const technicianLocationId = profile?.location_id || ''
+  const today = formatLocalDateKey(new Date())
+
+  const activeBookings = bookings
+    .filter((booking) =>
+      booking.status === 'reserved' &&
+      booking.installer_location_id === technicianLocationId
+    )
+
+  const exactBookings = activeBookings
+    .filter((booking) => booking.schedule_type === 'exact' && booking.installation_date)
+    .sort((a, b) =>
+      `${a.installation_date}${a.installation_time || ''}`.localeCompare(
+        `${b.installation_date}${b.installation_time || ''}`
+      )
+    )
+
+  const todayBookings = exactBookings.filter(
+    (booking) => booking.installation_date === today
+  )
+
+  const upcomingBookings = exactBookings.filter(
+    (booking) => booking.installation_date >= today
+  )
+
+  const nextBooking = upcomingBookings[0] || null
+
+  const myJobs = jobs.filter((job) =>
+    !technicianLocationId ||
+    job.technician_location_id === technicianLocationId ||
+    job.installer_location_id === technicianLocationId
+  )
+
+  const myOpenFollowups = followups.filter((followup) => {
+    if (!['pending', 'scheduled'].includes(followup.status)) return false
+    if (followup.technician_location_id) {
+      return followup.technician_location_id === technicianLocationId
+    }
+    const job = myJobs.find((item) => item.id === followup.job_id)
+    return Boolean(job)
+  })
+
+  const completedJobs = myJobs
+    .filter((job) => job.status === 'completed')
+    .sort((a, b) =>
+      String(b.completed_at || b.installation_date || '').localeCompare(
+        String(a.completed_at || a.installation_date || '')
+      )
+    )
+
+  const recordsToCheck = completedJobs.filter((job) => {
+    const photos = jobPhotos.filter((photo) => photo.job_id === job.id)
+    const hasLockBody = (job.job_items || []).some(
+      (item) => productById(item.product_id)?.category === 'lock_body'
+    )
+    return !job.customer_taught || photos.length === 0 || !hasLockBody
+  })
+
+  const myLeaves = leaves
+    .filter((leave) => leave.technician_location_id === technicianLocationId)
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+
+  const pendingLeaves = myLeaves.filter((leave) => leave.status === 'pending')
+  const approvedLeaves = myLeaves
+    .filter((leave) => leave.status === 'approved' && new Date(leave.end_at).getTime() >= Date.now())
+    .sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime())
+
+  const nextLeave = approvedLeaves[0] || null
+
+  const smartLockText = (booking) => {
+    const names = (booking?.reservation_items || [])
+      .map((item) => {
+        const product = productById(item.product_id)
+        if (!product || product.category === 'lock_body') return null
+        const name = productDisplayName(product)
+        return Number(item.quantity || 1) > 1
+          ? `${name} ×${item.quantity}`
+          : name
+      })
+      .filter(Boolean)
+    return names.length ? names.join(' + ') : 'Product TBC'
+  }
+
+  const goOps = (view) => {
+    setOperationsView(view)
+    setActiveTab('operations')
+  }
+
+  return (
+    <div className="page-stack fade-in technician-work-v76">
+      <section className="tech-work-hero-v76">
+        <div>
+          <p className="kicker">TECHNICIAN WORKSPACE</p>
+          <h2>My Work</h2>
+          <p>Today jobs, leave, pending cases and completed installation records in one place.</p>
+        </div>
+        <button className="primary-button tech-leave-main-v76" onClick={openLeaveRequest}>
+          <CalendarRange size={16} />
+          Apply Leave
+        </button>
+      </section>
+
+      <section className="tech-work-kpis-v76">
+        <button onClick={() => goOps('today')}>
+          <span>Today Jobs</span>
+          <strong>{todayBookings.length}</strong>
+          <small>Installation today</small>
+        </button>
+
+        <button onClick={() => goOps('calendar')}>
+          <span>Upcoming</span>
+          <strong>{upcomingBookings.length}</strong>
+          <small>Scheduled jobs</small>
+        </button>
+
+        <button className={myOpenFollowups.length ? 'warning' : ''} onClick={() => goOps('pending')}>
+          <span>Pending Settle</span>
+          <strong>{myOpenFollowups.length}</strong>
+          <small>Need follow-up</small>
+        </button>
+
+        <button className={recordsToCheck.length ? 'attention' : ''} onClick={() => goOps('completed')}>
+          <span>Records to Check</span>
+          <strong>{recordsToCheck.length}</strong>
+          <small>Missing installation info</small>
+        </button>
+      </section>
+
+      {nextBooking ? (
+        <section className="surface-card tech-next-job-v76">
+          <div className="tech-section-head-v76">
+            <div>
+              <p className="kicker">NEXT JOB</p>
+              <h3>{nextBooking.customer_name || 'Customer'}</h3>
+            </div>
+            <span className="tech-next-time-v76">
+              {crmDisplayDate(nextBooking.installation_date)}
+              {nextBooking.installation_time ? ` • ${nextBooking.installation_time}` : ''}
+            </span>
+          </div>
+
+          <div className="tech-next-products-v76">
+            <span>SMART LOCK</span>
+            <strong>{smartLockText(nextBooking)}</strong>
+          </div>
+
+          <div className="tech-next-meta-v76">
+            {nextBooking.installation_area && (
+              <span><MapPin size={13} /> {nextBooking.installation_area}</span>
+            )}
+            {nextBooking.installation_unit && (
+              <span>{nextBooking.installation_unit}</span>
+            )}
+          </div>
+
+          {nextBooking.technician_note && (
+            <div className="tech-important-note-v76">
+              <AlertTriangle size={15} />
+              <div>
+                <strong>Important Note</strong>
+                <span>{nextBooking.technician_note}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="tech-next-actions-v76">
+            {nextBooking.customer_phone && (
+              <a href={`tel:${nextBooking.customer_phone}`}>
+                <Phone size={15} /> Call
+              </a>
+            )}
+            {whatsappUrl(nextBooking.customer_phone) && (
+              <a href={whatsappUrl(nextBooking.customer_phone)} target="_blank" rel="noreferrer">
+                <MessageCircle size={15} /> WhatsApp
+              </a>
+            )}
+            {googleMapsUrl(nextBooking) && (
+              <a href={googleMapsUrl(nextBooking)} target="_blank" rel="noreferrer">
+                <MapPin size={15} /> Maps
+              </a>
+            )}
+          </div>
+
+          {nextBooking.installation_date === today && (
+            <button
+              className="primary-button tech-complete-next-v76"
+              onClick={() => openCompleteInstallation(nextBooking)}
+            >
+              <CheckCircle2 size={16} />
+              Complete Installation
+            </button>
+          )}
+        </section>
+      ) : (
+        <section className="surface-card tech-next-job-v76">
+          <EmptyState
+            title="No upcoming job"
+            text="Your next scheduled installation will appear here."
+          />
+        </section>
+      )}
+
+      <section className="tech-quick-grid-v76">
+        <button onClick={() => goOps('today')}>
+          <CalendarDays size={19} />
+          <div>
+            <strong>Today Schedule</strong>
+            <span>Open today's jobs</span>
+          </div>
+          <ChevronRight size={17} />
+        </button>
+
+        <button onClick={openLeaveRequest}>
+          <CalendarRange size={19} />
+          <div>
+            <strong>Apply Leave</strong>
+            <span>Full day or selected hours</span>
+          </div>
+          <ChevronRight size={17} />
+        </button>
+
+        <button onClick={() => goOps('completed')}>
+          <History size={19} />
+          <div>
+            <strong>Completed History</strong>
+            <span>Review or correct past installation</span>
+          </div>
+          <ChevronRight size={17} />
+        </button>
+
+        <button onClick={() => goOps('pending')}>
+          <AlertTriangle size={19} />
+          <div>
+            <strong>Pending Settle</strong>
+            <span>Unfinished / after-sales cases</span>
+          </div>
+          <ChevronRight size={17} />
+        </button>
+      </section>
+
+      <section className="surface-card tech-leave-summary-v76">
+        <div className="tech-section-head-v76">
+          <div>
+            <p className="kicker">MY AVAILABILITY</p>
+            <h3>Leave</h3>
+          </div>
+          <button className="text-button" onClick={() => goOps('leave')}>View All</button>
+        </div>
+
+        <div className="tech-leave-summary-grid-v76">
+          <div>
+            <span>Pending Request</span>
+            <strong>{pendingLeaves.length}</strong>
+          </div>
+          <div>
+            <span>Approved Upcoming</span>
+            <strong>{approvedLeaves.length}</strong>
+          </div>
+        </div>
+
+        {nextLeave && (
+          <div className="tech-next-leave-v76">
+            <BadgeCheck size={16} />
+            <div>
+              <strong>Next approved leave</strong>
+              <span>
+                {new Date(nextLeave.start_at).toLocaleString('en-MY', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+                {' → '}
+                {new Date(nextLeave.end_at).toLocaleString('en-MY', {
+                  day: '2-digit',
+                  month: 'short',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {recordsToCheck.length > 0 && (
+        <section className="surface-card tech-record-check-v76">
+          <div className="tech-section-head-v76">
+            <div>
+              <p className="kicker">INSTALLATION RECORD</p>
+              <h3>Need to check</h3>
+            </div>
+            <strong>{recordsToCheck.length}</strong>
+          </div>
+
+          <p className="tech-record-help-v76">
+            These completed jobs may be missing Lock Body, photo or Customer Taught confirmation.
+          </p>
+
+          <div className="tech-record-list-v76">
+            {recordsToCheck.slice(0, 3).map((job) => (
+              <button key={job.id} onClick={() => openEditCompletedJob(job)}>
+                <div>
+                  <strong>{job.customer_name || 'Customer'}</strong>
+                  <span>{crmDisplayDate(job.completed_at || job.installation_date)}</span>
+                </div>
+                <Pencil size={16} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  )
+}
+
+
+function TechnicianLeavePanelV75({ leaves, currentRole, profile, locationById, openLeaveRequest, decideLeave, cancelLeave }) {
+  const now = Date.now()
+  const sorted = [...(leaves || [])].sort((a, b) => new Date(a.start_at) - new Date(b.start_at))
+  const pending = sorted.filter((item) => item.status === 'pending')
+  const upcomingApproved = sorted.filter((item) => item.status === 'approved' && new Date(item.end_at).getTime() >= now)
+  const history = sorted.filter((item) => item.status !== 'pending' && !(item.status === 'approved' && new Date(item.end_at).getTime() >= now)).reverse().slice(0, 12)
+  const isManagement = ['owner','admin'].includes(currentRole)
+
+  const card = (leave, managementActions = false) => {
+    const tech = locationById(leave.technician_location_id)
+    return (
+      <article className={`leave-card ${leave.status}`} key={leave.id}>
+        <div className="leave-card-head">
+          <div>
+            <span className={`leave-status ${leave.status}`}>{leave.status}</span>
+            <h3>{tech?.name || 'Technician'}</h3>
+          </div>
+          <CalendarRange size={18} />
+        </div>
+        <strong className="leave-range">{leave.full_day ? 'Full day' : 'Time leave'} • {leaveDateTimeLabel(leave.start_at)} → {leaveDateTimeLabel(leave.end_at)}</strong>
+        <p>{leave.reason || 'No reason provided'}</p>
+        {leave.decision_note && <small>Decision note: {leave.decision_note}</small>}
+        {managementActions && leave.status === 'pending' && (
+          <div className="leave-actions">
+            <button className="secondary-button danger-soft" onClick={() => decideLeave(leave, 'rejected')}>Reject</button>
+            <button className="primary-button" onClick={() => decideLeave(leave, 'approved')}><CheckCircle2 size={15} /> Approve</button>
+          </div>
+        )}
+        {!isManagement && ['pending'].includes(leave.status) && (
+          <div className="leave-actions"><button className="secondary-button danger-soft" onClick={() => cancelLeave(leave)}>Cancel Request</button></div>
+        )}
+      </article>
+    )
+  }
+
+  return (
+    <section className="leave-page-v75">
+      <div className="surface-card leave-page-head">
+        <div><p className="kicker">TECHNICIAN AVAILABILITY</p><h3>{isManagement ? 'Leave Requests' : 'My Leave'}</h3><span>{isManagement ? 'Approve leave before it blocks job assignment and appears on Calendar.' : 'Apply for a full day or a specific time range.'}</span></div>
+        {!isManagement && <button className="primary-button" onClick={openLeaveRequest}><Plus size={15} /> Apply Leave</button>}
+      </div>
+
+      {isManagement && (
+        <div className="leave-section-v75">
+          <div className="section-title-row"><div><p className="kicker">ACTION REQUIRED</p><h3>Pending Approval</h3></div><strong>{pending.length}</strong></div>
+          <div className="leave-grid">{pending.map((item) => card(item, true))}{pending.length === 0 && <div className="surface-card calendar-empty-card">No pending leave request.</div>}</div>
+        </div>
+      )}
+
+      <div className="leave-section-v75">
+        <div className="section-title-row"><div><p className="kicker">UPCOMING</p><h3>Approved Leave</h3></div><strong>{upcomingApproved.length}</strong></div>
+        <div className="leave-grid">{upcomingApproved.map((item) => card(item, false))}{upcomingApproved.length === 0 && <div className="surface-card calendar-empty-card">No upcoming approved leave.</div>}</div>
+      </div>
+
+      {!isManagement && (
+        <div className="leave-section-v75">
+          <div className="section-title-row"><div><p className="kicker">REQUESTS</p><h3>Pending / Previous</h3></div></div>
+          <div className="leave-grid">{[...pending, ...history].map((item) => card(item, false))}</div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function TechnicianCompletedJobsV75({ jobs, productById, productDisplayName, locationById, jobPhotos, openEditCompletedJob }) {
+  return (
+    <section className="technician-completed-v75">
+      <div className="surface-card completed-history-head">
+        <div><p className="kicker">COMPLETED HISTORY</p><h3>My Completed Jobs</h3><span>Completed jobs stay here so you can check or correct installation details later.</span></div>
+        <strong>{jobs.length}</strong>
+      </div>
+      <div className="completed-job-list-v75">
+        {jobs.map((job) => {
+          const smartLocks = (job.job_items || []).filter((item) => productById(item.product_id)?.category !== 'lock_body')
+          const lockBodies = (job.job_items || []).filter((item) => productById(item.product_id)?.category === 'lock_body')
+          const photos = (jobPhotos || []).filter((photo) => photo.job_id === job.id)
+          return (
+            <article className="completed-job-card-v75" key={job.id}>
+              <div className="completed-job-top-v75"><div><span>{new Date(job.completed_at).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' })}</span><h3>{job.customer_name}</h3><p>{job.installation_area || 'Area not recorded'}</p></div><BadgeCheck size={20} /></div>
+              <div className="completed-job-products-v75"><span>Smart Lock</span><strong>{smartLocks.length ? smartLocks.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : '—'}</strong></div>
+              <div className="completed-job-products-v75 lock-body"><span>Lock Body Used</span><strong>{lockBodies.length ? lockBodies.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : 'Not updated'}</strong></div>
+              <div className="completed-job-meta-v75"><span>{job.customer_taught ? '✓ Customer taught' : 'Customer teaching not marked'}</span><span>{job.review_received ? '✓ Review received' : job.review_asked ? 'Review asked' : 'Review not updated'}</span><span>{photos.length} photo{photos.length === 1 ? '' : 's'}</span></div>
+              {job.completion_remark && <p className="completed-job-remark-v75">{job.completion_remark}</p>}
+              <button className="secondary-button completed-edit-button-v75" onClick={() => openEditCompletedJob(job)}><Pencil size={15} /> Review / Edit Installation</button>
+            </article>
+          )
+        })}
+        {jobs.length === 0 && <div className="surface-card"><EmptyState title="No completed jobs yet" text="Completed installations will remain here for future checking." /></div>}
+      </div>
+    </section>
+  )
+}
+
+function LeaveRequestModalV75({ form, setForm, saving, error, close, save }) {
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="mini-modal leave-modal-v75" onClick={(event) => event.stopPropagation()}>
+        <div className="mini-modal-head"><div><p className="kicker">APPLY LEAVE</p><h2>Request Time Off</h2><p>Approved leave will block new job assignment for this period.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
+        <label className="leave-full-day-toggle"><input type="checkbox" checked={form.full_day} onChange={(event) => setForm((current) => ({ ...current, full_day: event.target.checked }))} /><div><strong>Full Day Leave</strong><span>Turn off to request a specific time range.</span></div></label>
+        <div className="transaction-two-col"><div className="transaction-field"><label>Start Date *</label><input type="date" value={form.start_date} onChange={(event) => setForm((current) => ({ ...current, start_date: event.target.value, end_date: current.end_date < event.target.value ? event.target.value : current.end_date }))} /></div><div className="transaction-field"><label>End Date *</label><input type="date" value={form.end_date} min={form.start_date} onChange={(event) => setForm((current) => ({ ...current, end_date: event.target.value }))} /></div></div>
+        {!form.full_day && <div className="transaction-two-col"><div className="transaction-field"><label>Start Time *</label><input type="time" value={form.start_time} onChange={(event) => setForm((current) => ({ ...current, start_time: event.target.value }))} /></div><div className="transaction-field"><label>End Time *</label><input type="time" value={form.end_time} onChange={(event) => setForm((current) => ({ ...current, end_time: event.target.value }))} /></div></div>}
+        <div className="transaction-field"><label>Reason</label><textarea rows="3" value={form.reason} onChange={(event) => setForm((current) => ({ ...current, reason: event.target.value }))} placeholder="Personal leave / appointment / family matter..." /></div>
+        {error && <div className="transaction-error">{error}</div>}
+        <div className="mini-modal-actions"><button className="secondary-button" onClick={close} disabled={saving}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Submitting...' : 'Submit Leave'}</button></div>
+      </section>
+    </div>
+  )
+}
+
+function EditCompletedJobModalV75({ job, form, setForm, files, setFiles, lockBodyItems, lockBodyProducts, updateLockBody, addLockBody, removeLockBody, productById, productDisplayName, existingPhotos, saving, error, close, save }) {
+  const smartLocks = (job.job_items || []).filter((item) => productById(item.product_id)?.category !== 'lock_body')
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal completed-edit-modal-v75" onClick={(event) => event.stopPropagation()}>
+        <div className="transaction-modal-head"><div><p className="kicker">COMPLETED JOB</p><h2>Review / Edit Installation</h2><p>{job.customer_name} • {job.job_no}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
+        <div className="transaction-scroll">
+          <div className="completion-smart-lock-readonly"><span>SMART LOCK INSTALLED</span><strong>{smartLocks.length ? smartLocks.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : '—'}</strong><small>Sales / booking item is kept read-only here.</small></div>
+          <div className="completion-lock-body-section"><div className="completion-lock-body-head"><div><p className="kicker">ACTUAL INSTALLATION</p><h3>Lock Body Used</h3></div><button type="button" className="add-line-button" onClick={addLockBody}><Plus size={15} /> Add</button></div>
+            {lockBodyItems.map((item, index) => <div className="completion-lock-body-row" key={index}><select value={item.product_id} onChange={(event) => updateLockBody(index, 'product_id', event.target.value)}><option value="">Select lock body</option>{lockBodyProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>)}</select><div className="completion-lock-body-qty"><span>Qty</span><input type="number" min="1" value={item.quantity} onChange={(event) => updateLockBody(index, 'quantity', event.target.value)} /></div><button type="button" className="remove-line-button" onClick={() => removeLockBody(index)}><Trash2 size={15} /></button></div>)}
+          </div>
+          <div className="completion-checks"><label><input type="checkbox" checked={form.customer_taught} onChange={(event) => setForm((current) => ({ ...current, customer_taught: event.target.checked }))} /><span><strong>Customer Taught</strong><small>Usage explained to customer</small></span></label><label><input type="checkbox" checked={form.review_asked} onChange={(event) => setForm((current) => ({ ...current, review_asked: event.target.checked }))} /><span><strong>Review Asked</strong><small>Requested customer review</small></span></label><label><input type="checkbox" checked={form.review_received} onChange={(event) => setForm((current) => ({ ...current, review_received: event.target.checked, review_asked: event.target.checked || current.review_asked }))} /><span><strong>Review Received</strong><small>Customer review confirmed</small></span></label></div>
+          <div className="transaction-field"><label>Completion Remark</label><textarea rows="3" value={form.completion_remark} onChange={(event) => setForm((current) => ({ ...current, completion_remark: event.target.value }))} placeholder="Anything installed / adjusted / taught..." /></div>
+          {existingPhotos.length > 0 && <div className="completed-existing-photos-v75"><label>Existing Photos</label><div className="job-photo-strip">{existingPhotos.map((photo) => <a key={photo.id} href={photo.signed_url || '#'} target="_blank" rel="noreferrer">{photo.signed_url ? <img src={photo.signed_url} alt={photo.file_name || 'Installation'} /> : <Camera size={18} />}</a>)}</div></div>}
+          <div className="transaction-field"><label>Add More Installation Photos</label><input type="file" accept="image/*" multiple onChange={(event) => setFiles(Array.from(event.target.files || []))} /><small>{files.length ? `${files.length} new photo(s) selected` : 'Optional'}</small></div>
+          {job.settlement_status === 'pending' && <div className="completion-important-note"><AlertTriangle size={16} /><div><strong>Pending Settle remains open</strong><p>{job.pending_issue || 'Check Pending Settle tab for follow-up.'}</p></div></div>}
+          {error && <div className="transaction-error">{error}</div>}
+        </div>
+        <div className="transaction-footer"><button className="secondary-button" onClick={close} disabled={saving}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Changes'}</button></div>
+      </section>
+    </div>
+  )
+}
+
 function OperationsPage({
   bookings,
   jobs,
@@ -3986,6 +6018,12 @@ function OperationsPage({
   canCompleteJobs,
   acknowledgeBookingNote,
   profileByUserId,
+  technicianLeaves = [],
+  openLeaveRequest,
+  decideLeave,
+  cancelLeave,
+  openEditCompletedJob,
+  jobPhotos = [],
 }) {
   const activeBookings = bookings.filter((item) => item.status === 'reserved')
   const promotion = activeBookings.filter((item) => item.booking_type === 'promotion_only')
@@ -3998,6 +6036,10 @@ function OperationsPage({
   const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayBookings = scheduled.filter((item) => item.installation_date === localDate)
   const todayFollowups = pendingFollowups.filter((item) => item.scheduled_date === localDate)
+  const completedJobs = jobs
+    .filter((item) => item.status === 'completed')
+    .sort((a, b) => String(b.completed_at || '').localeCompare(String(a.completed_at || '')))
+  const pendingLeaveCount = technicianLeaves.filter((item) => item.status === 'pending').length
 
   const bookingCard = (booking) => (
     <BookingCardV6
@@ -4024,8 +6066,8 @@ function OperationsPage({
       <section className="surface-card page-intro operations-intro">
         <div>
           <p className="kicker">SVR DAILY OPERATIONS</p>
-          <h2>Bookings & Installation Planner</h2>
-          <p>Promotion booking → reserve stock → schedule → hand over → install → pending settle.</p>
+          <h2>Installation Calendar & Jobs</h2>
+          <p>Booking → schedule → technician → installation → pending settle.</p>
         </div>
         {canManage && (
           <button className="primary-button" onClick={openNewBooking}>
@@ -4035,8 +6077,8 @@ function OperationsPage({
       </section>
 
       <section className="ops-kpi-grid">
-        <div><span>Promotion / Product TBC</span><strong>{promotion.length}</strong><small>No stock reserved</small></div>
-        <div><span>Installation TBC</span><strong>{tbc.length}</strong><small>Products reserved</small></div>
+        <div><span>Product TBC</span><strong>{promotion.length}</strong><small>Item not confirmed</small></div>
+        <div><span>Installation TBC</span><strong>{tbc.length}</strong><small>Product confirmed</small></div>
         <div><span>Estimated</span><strong>{estimated.length}</strong><small>Waiting exact date</small></div>
         <div className="warning"><span>Pending Settle</span><strong>{pendingFollowups.length}</strong><small>Need follow-up</small></div>
       </section>
@@ -4047,15 +6089,16 @@ function OperationsPage({
               ['today', `Today ${todayBookings.length + todayFollowups.length}`],
               ['calendar', 'Calendar'],
               ['pending', `Pending ${pendingFollowups.length}`],
-              ['board', 'Board'],
-              ['schedule', `Scheduled ${scheduled.length}`],
+              ['completed', `Completed ${completedJobs.length}`],
+              ['leave', `Leave ${pendingLeaveCount}`],
             ]
           : [
-              ['board', 'Board'],
               ['calendar', 'Calendar'],
+              ['board', 'Board'],
               ['today', `Today ${todayBookings.length + todayFollowups.length}`],
               ['schedule', `Scheduled ${scheduled.length}`],
               ['pending', `Pending Settle ${pendingFollowups.length}`],
+              ['leave', `Leave ${pendingLeaveCount}`],
             ]).map(([id, label]) => (
           <button key={id} className={operationsView === id ? 'active' : ''} onClick={() => setOperationsView(id)}>{label}</button>
         ))}
@@ -4073,7 +6116,7 @@ function OperationsPage({
 
           <OpsColumn
             title="Installation TBC"
-            subtitle="Product confirmed / reserved"
+            subtitle="Product confirmed"
             count={tbc.length}
           >
             {tbc.map(bookingCard)}
@@ -4104,11 +6147,14 @@ function OperationsPage({
           jobs={jobs}
           locations={calendarLocations}
           locationById={locationById}
+          productById={productById}
+          productDisplayName={productDisplayName}
           openEditBooking={openEditBooking}
           openFollowup={openFollowup}
           canManage={canManage}
           currentRole={currentRole}
           profile={profile}
+          technicianLeaves={technicianLeaves}
         />
       )}
 
@@ -4142,6 +6188,29 @@ function OperationsPage({
         </section>
       )}
 
+      {operationsView === 'completed' && currentRole === 'technician' && (
+        <TechnicianCompletedJobsV75
+          jobs={completedJobs}
+          productById={productById}
+          productDisplayName={productDisplayName}
+          locationById={locationById}
+          jobPhotos={jobPhotos}
+          openEditCompletedJob={openEditCompletedJob}
+        />
+      )}
+
+      {operationsView === 'leave' && (
+        <TechnicianLeavePanelV75
+          leaves={technicianLeaves}
+          currentRole={currentRole}
+          profile={profile}
+          locationById={locationById}
+          openLeaveRequest={openLeaveRequest}
+          decideLeave={decideLeave}
+          cancelLeave={cancelLeave}
+        />
+      )}
+
       {operationsView === 'pending' && (
         <section className="ops-list">
           {pendingFollowups.map((follow) => {
@@ -4162,11 +6231,14 @@ function OperationsCalendarV61({
   jobs,
   locations,
   locationById,
+  productById,
+  productDisplayName,
   openEditBooking,
   openFollowup,
   canManage,
   currentRole,
   profile,
+  technicianLeaves = [],
 }) {
   const [calendarMode, setCalendarMode] = useState(() => {
     if (typeof window === 'undefined') return 'month'
@@ -4211,6 +6283,10 @@ function OperationsCalendarV61({
           'Installation',
         address: booking.installation_address || '',
         technicianId: booking.installer_location_id || '',
+        products: (booking.reservation_items || [])
+          .filter((item) => productById(item.product_id)?.category !== 'lock_body')
+          .map((item) => `${Number(item.quantity || 1) > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`)
+          .join(' + '),
         record: booking,
       }))
 
@@ -4241,7 +6317,46 @@ function OperationsCalendarV61({
         }
       })
 
-    return [...bookingEvents, ...followupEvents]
+    const leaveEvents = (technicianLeaves || [])
+      .filter((leave) => leave.status === 'approved')
+      .flatMap((leave) => {
+        const start = new Date(leave.start_at)
+        const endExclusive = new Date(leave.end_at)
+        const endInclusive = new Date(endExclusive.getTime() - 1000)
+        const firstKey = formatLocalDateKey(start)
+        const lastKey = formatLocalDateKey(endInclusive)
+        const days = []
+        let cursorDay = new Date(`${firstKey}T12:00:00`)
+        const lastDay = new Date(`${lastKey}T12:00:00`)
+        while (cursorDay <= lastDay) {
+          const key = formatLocalDateKey(cursorDay)
+          let timeLabel = 'All day'
+          if (!leave.full_day) {
+            if (firstKey === lastKey) {
+              timeLabel = `${start.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}–${endExclusive.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}`
+            } else if (key === firstKey) {
+              timeLabel = `From ${start.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}`
+            } else if (key === lastKey) {
+              timeLabel = `Until ${endExclusive.toLocaleTimeString('en-MY', { hour: '2-digit', minute: '2-digit' })}`
+            }
+          }
+          days.push({
+            id: `leave-${leave.id}-${key}`,
+            type: 'leave',
+            date: key,
+            time: timeLabel,
+            title: `${locationById(leave.technician_location_id)?.name || 'Technician'} Leave`,
+            area: leave.reason || 'Approved leave',
+            address: '',
+            technicianId: leave.technician_location_id || '',
+            record: leave,
+          })
+          cursorDay = addDays(cursorDay, 1)
+        }
+        return days
+      })
+
+    return [...bookingEvents, ...followupEvents, ...leaveEvents]
       .filter((event) => {
         if (!technicianFilter || technicianFilter === 'all') return true
         return event.technicianId === technicianFilter
@@ -4253,7 +6368,9 @@ function OperationsCalendarV61({
     bookings,
     followups,
     jobs,
+    technicianLeaves,
     technicianFilter,
+    locationById,
   ])
 
   const unscheduled = bookings.filter((booking) => {
@@ -4303,12 +6420,13 @@ function OperationsCalendarV61({
 
     if (event.type === 'installation') {
       openEditBooking(event.record)
-    } else {
+    } else if (event.type === 'followup') {
       openFollowup(event.record, 'schedule')
     }
   }
 
   function eventMapUrl(event) {
+    if (event.type === 'leave') return ''
     return googleMapsUrl(
       event.type === 'installation' ? event.record : event.job
     )
@@ -4543,55 +6661,90 @@ function WeekCalendarV61({
   locationById,
 }) {
   const start = startOfWeekMonday(cursor)
-  const days = Array.from({ length: 7 }, (_, index) =>
-    addDays(start, index)
-  )
+  const days = Array.from({ length: 7 }, (_, index) => addDays(start, index))
   const todayKey = formatLocalDateKey(new Date())
+  const weekKeys = days.map((day) => formatLocalDateKey(day))
+  const defaultSelected = weekKeys.includes(todayKey) ? todayKey : weekKeys[0]
+  const [selectedKey, setSelectedKey] = useState(defaultSelected)
+
+  useEffect(() => {
+    const nextKeys = days.map((day) => formatLocalDateKey(day))
+    setSelectedKey((current) => nextKeys.includes(current) ? current : (nextKeys.includes(todayKey) ? todayKey : nextKeys[0]))
+  }, [cursor])
+
+  const selectedDay = days.find((day) => formatLocalDateKey(day) === selectedKey) || days[0]
+  const selectedEvents = events.filter((event) => event.date === selectedKey)
 
   return (
-    <div className="calendar-week-grid">
-      {days.map((day) => {
-        const key = formatLocalDateKey(day)
-        const dayEvents = events.filter((event) => event.date === key)
+    <>
+      <div className="calendar-mobile-agenda">
+        <div className="calendar-week-strip">
+          {days.map((day) => {
+            const key = formatLocalDateKey(day)
+            const count = events.filter((event) => event.date === key).length
+            return (
+              <button
+                type="button"
+                key={key}
+                className={`${key === selectedKey ? 'active' : ''} ${key === todayKey ? 'today' : ''}`}
+                onClick={() => setSelectedKey(key)}
+              >
+                <span>{day.toLocaleDateString('en-MY', { weekday: 'short' })}</span>
+                <strong>{day.getDate()}</strong>
+                <small>{count > 0 ? count : ''}</small>
+              </button>
+            )
+          })}
+        </div>
 
-        return (
-          <section
-            key={key}
-            className={
-              key === todayKey
-                ? 'surface-card calendar-week-day today'
-                : 'surface-card calendar-week-day'
-            }
-          >
-            <div className="calendar-week-day-head">
-              <span>
-                {day.toLocaleDateString('en-MY', {
-                  weekday: 'short',
-                })}
-              </span>
-              <strong>{day.getDate()}</strong>
+        <section className="surface-card calendar-agenda-card">
+          <div className="calendar-agenda-head">
+            <div>
+              <p className="kicker">JOBS</p>
+              <h3>{selectedDay.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'short' })}</h3>
             </div>
+            <strong>{selectedEvents.length}</strong>
+          </div>
+          <div className="calendar-agenda-list">
+            {selectedEvents.map((event) => (
+              <CalendarEventV61
+                key={event.id}
+                event={event}
+                eventClick={eventClick}
+                mapUrl={eventMapUrl(event)}
+                locationById={locationById}
+                expanded
+              />
+            ))}
+            {selectedEvents.length === 0 && (
+              <div className="calendar-agenda-empty">No installation or follow-up job on this day.</div>
+            )}
+          </div>
+        </section>
+      </div>
 
-            <div className="calendar-week-day-body">
-              {dayEvents.map((event) => (
-                <CalendarEventV61
-                  key={event.id}
-                  event={event}
-                  eventClick={eventClick}
-                  mapUrl={eventMapUrl(event)}
-                  locationById={locationById}
-                  expanded
-                />
-              ))}
+      <div className="calendar-week-grid calendar-desktop-week">
+        {days.map((day) => {
+          const key = formatLocalDateKey(day)
+          const dayEvents = events.filter((event) => event.date === key)
 
-              {dayEvents.length === 0 && (
-                <small className="calendar-no-event">No jobs</small>
-              )}
-            </div>
-          </section>
-        )
-      })}
-    </div>
+          return (
+            <section key={key} className={key === todayKey ? 'surface-card calendar-week-day today' : 'surface-card calendar-week-day'}>
+              <div className="calendar-week-day-head">
+                <span>{day.toLocaleDateString('en-MY', { weekday: 'short' })}</span>
+                <strong>{day.getDate()}</strong>
+              </div>
+              <div className="calendar-week-day-body">
+                {dayEvents.map((event) => (
+                  <CalendarEventV61 key={event.id} event={event} eventClick={eventClick} mapUrl={eventMapUrl(event)} locationById={locationById} expanded />
+                ))}
+                {dayEvents.length === 0 && <small className="calendar-no-event">No jobs</small>}
+              </div>
+            </section>
+          )
+        })}
+      </div>
+    </>
   )
 }
 
@@ -4615,7 +6768,7 @@ function CalendarEventV61({
         onClick={() => eventClick(event)}
       >
         <span>
-          {event.type === 'followup' ? '🔧 ' : ''}
+          {event.type === 'followup' ? '🔧 ' : event.type === 'leave' ? '🌴 ' : ''}
           {event.time || 'TBC'}
         </span>
         <strong>{event.title}</strong>
@@ -4625,6 +6778,8 @@ function CalendarEventV61({
             {event.area}
           </small>
         )}
+        {expanded && event.type === 'installation' && event.products && <small className="calendar-smart-lock">🔐 {event.products}</small>}
+        {expanded && event.type === 'leave' && event.area && <small className="calendar-leave-reason">{event.area}</small>}
         {expanded && tech && <small>{tech.name}</small>}
         {expanded && event.type === 'installation' && event.record?.technician_note && (
           <small className="calendar-important-note">⚠ {event.record.technician_note}</small>
@@ -4757,7 +6912,11 @@ function BookingCardV6({
       )}
 
       <div className="ops-product-tags">
-        {productTbc ? <span className="tbc-product">Product TBC</span> : (booking.reservation_items || []).map((item) => <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>)}
+        {productTbc ? (
+          <span className="tbc-product">Product TBC</span>
+        ) : (booking.reservation_items || [])
+          .filter((item) => productById(item.product_id)?.category !== 'lock_body')
+          .map((item) => <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>)}
       </div>
 
       {booking.selling_price != null && (
@@ -4816,7 +6975,7 @@ function BookingCardV6({
           </button>
         )}
 
-        {canManage && !productTbc && booking.installer_location_id && booking.handover_status !== 'handed_over' && <button className="secondary-button" onClick={() => openHandover(booking)}>Hand Over</button>}
+        {canManage && !productTbc && booking.installer_location_id && booking.handover_status !== 'handed_over' && <button className="secondary-button" onClick={() => openHandover(booking)}>Items Prepared</button>}
         {canCompleteJobs && !productTbc && <button className="primary-button" onClick={() => openCompleteInstallation(booking)}>Complete Install</button>}
         {canManage && <button className="icon-button danger-small" title="Cancel booking" onClick={() => cancelReservation(booking)}><XCircle size={16} /></button>}
       </div>
@@ -5004,7 +7163,7 @@ function GlobalSearchModal({
 
               {productResults.length > 0 && (
                 <section>
-                  <div className="global-search-section-title"><Boxes size={14} /><strong>Inventory</strong><span>{productResults.length}</span></div>
+                  <div className="global-search-section-title"><Boxes size={14} /><strong>Products</strong><span>{productResults.length}</span></div>
                   <div className="global-search-results">
                     {productResults.map((item) => (
                       <button type="button" key={item.product_id} onClick={() => openProduct(item)}>
@@ -5012,7 +7171,7 @@ function GlobalSearchModal({
                         <div>
                           <strong>{productDisplayName(item)}</strong>
                           <span>{item.category === 'smart_lock' ? 'Smart Lock' : 'Lock Body'}</span>
-                          <small>Available {item.available_stock} • Physical {item.physical_stock}</small>
+                          <small>{item.app_variant || item.sku || 'Booking item'}</small>
                         </div>
                         <ChevronRight size={16} />
                       </button>
@@ -5130,12 +7289,13 @@ function AdjustStockModal({
   )
 }
 
-function BookingV6Modal({ editor, form, items, products, locations, saving, error, updateForm, updateItem, addItem, removeItem, close, save }) {
+function BookingV6Modal({ editor, form, items, products, locations, saving, error, updateForm, updateItem, addItem, removeItem, close, save, technicianLeaves = [] }) {
   const productConfirmed = form.booking_type === 'product_confirmed'
+  const directCustomer = Boolean(editor.directCustomer)
   return (
     <div className="transaction-backdrop" onClick={close}>
       <section className="transaction-modal booking-v6-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="transaction-modal-head"><div><p className="kicker">{editor.type === 'new' ? 'NEW BOOKING' : 'EDIT BOOKING'}</p><h2>{editor.type === 'new' ? 'Create Booking' : 'Update Booking'}</h2><p>{editor.type === 'edit' && form.booking_type === 'promotion_only' ? 'You can update customer, address, timing, payment or notes without confirming a product.' : 'It is okay if product or installation date is still TBC.'}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
+        <div className="transaction-modal-head"><div><p className="kicker">{directCustomer ? 'ADD CUSTOMER' : editor.type === 'new' ? 'NEW BOOKING' : 'EDIT BOOKING'}</p><h2>{directCustomer ? 'Confirmed Customer Order' : editor.type === 'new' ? 'Create Booking' : 'Update Booking'}</h2><p>{directCustomer ? 'For customers who already confirmed. Add customer details, smart lock, payment and installation timing.' : editor.type === 'edit' && form.booking_type === 'promotion_only' ? 'You can update customer, address, timing, payment or notes without confirming a product.' : 'It is okay if product or installation date is still TBC.'}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
         <div className="transaction-scroll">
           <div className="transaction-two-col">
             <div className="transaction-field"><label>Customer Name *</label><input value={form.customer_name} onChange={(e) => updateForm('customer_name', e.target.value)} /></div>
@@ -5200,10 +7360,14 @@ function BookingV6Modal({ editor, form, items, products, locations, saving, erro
             />
           </div>
 
-          <div className="booking-type-switch">
-            <button className={form.booking_type === 'promotion_only' ? 'active' : ''} onClick={() => updateForm('booking_type', 'promotion_only')}><Star size={16} /><strong>Promotion Booking</strong><span>Product TBC • no stock reserved</span></button>
-            <button className={form.booking_type === 'product_confirmed' ? 'active' : ''} onClick={() => updateForm('booking_type', 'product_confirmed')}><PackageCheck size={16} /><strong>Product Confirmed</strong><span>Reserve selected stock</span></button>
-          </div>
+          {directCustomer ? (
+            <div className="direct-customer-banner"><BadgeCheck size={17} /><div><strong>Confirmed Customer</strong><span>Choose the smart lock below. Lock body is recorded by the technician after installation.</span></div></div>
+          ) : (
+            <div className="booking-type-switch">
+              <button className={form.booking_type === 'promotion_only' ? 'active' : ''} onClick={() => updateForm('booking_type', 'promotion_only')}><Star size={16} /><strong>Promotion Booking</strong><span>Product TBC • item not confirmed</span></button>
+              <button className={form.booking_type === 'product_confirmed' ? 'active' : ''} onClick={() => updateForm('booking_type', 'product_confirmed')}><PackageCheck size={16} /><strong>Product Confirmed</strong><span>Smart lock confirmed for installation</span></button>
+            </div>
+          )}
 
           <div className="transaction-two-col">
             <div className="transaction-field"><label>Promotion / Deal</label><input value={form.promotion_name} onChange={(e) => updateForm('promotion_name', e.target.value)} placeholder="Sept Promo / Combo 2" /></div>
@@ -5215,15 +7379,15 @@ function BookingV6Modal({ editor, form, items, products, locations, saving, erro
           </div>
 
           {productConfirmed && (
-            <div className="transaction-products"><div className="transaction-products-head"><div><p className="kicker">RESERVED PRODUCTS</p><h3>Smart Lock / Lock Body</h3></div><button type="button" className="add-line-button" onClick={addItem}><Plus size={15} /> Add item</button></div>
-              {items.map((item, index) => <div className="transaction-item" key={index}><div className="transaction-item-main"><select value={item.product_id} onChange={(e) => updateItem(index, 'product_id', e.target.value)}><option value="">Select product</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>)}</select><div className="transaction-qty"><span>Qty</span><input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} /></div><button type="button" className="remove-line-button" onClick={() => removeItem(index)}><Trash2 size={16} /></button></div></div>)}
+            <div className="transaction-products"><div className="transaction-products-head"><div><p className="kicker">INSTALLATION ITEM</p><h3>Smart Lock to Install</h3></div><button type="button" className="add-line-button" onClick={addItem}><Plus size={15} /> Add item</button></div>
+              {items.map((item, index) => <div className="transaction-item" key={index}><div className="transaction-item-main"><select value={item.product_id} onChange={(e) => updateItem(index, 'product_id', e.target.value)}><option value="">Select smart lock</option>{products.map((product) => <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>)}</select><div className="transaction-qty"><span>Qty</span><input type="number" min="1" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} /></div><button type="button" className="remove-line-button" onClick={() => removeItem(index)}><Trash2 size={16} /></button></div></div>)}
             </div>
           )}
 
           <div className="transaction-field"><label>Installation Timing</label><div className="timing-options">{[['tbc','TBC'],['estimated','Estimated'],['exact','Exact Date']].map(([id,label]) => <button key={id} className={form.schedule_type === id ? 'active' : ''} onClick={() => updateForm('schedule_type', id)}>{label}</button>)}</div></div>
           {form.schedule_type === 'estimated' && <div className="transaction-field"><label>Estimated Installation *</label><input value={form.estimated_installation} onChange={(e) => updateForm('estimated_installation', e.target.value)} placeholder="e.g. Dec '26 • house still renovating" /></div>}
           {form.schedule_type === 'exact' && <div className="transaction-two-col"><div className="transaction-field"><label>Date *</label><input type="date" value={form.installation_date} onChange={(e) => updateForm('installation_date', e.target.value)} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.installation_time} onChange={(e) => updateForm('installation_time', e.target.value)} /></div></div>}
-          <div className="transaction-field"><label>Technician / Stock Holder</label><select value={form.installer_location_id} onChange={(e) => updateForm('installer_location_id', e.target.value)}><option value="">TBC / Not assigned</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+          <div className="transaction-field"><label>Technician / Installer</label><select value={form.installer_location_id} onChange={(e) => updateForm('installer_location_id', e.target.value)}><option value="">TBC / Not assigned</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => { const onLeave = form.schedule_type === 'exact' && approvedLeaveConflict(technicianLeaves, l.id, form.installation_date, form.installation_time); return <option key={l.id} value={l.id} disabled={onLeave}>{l.name}{onLeave ? ' • On Leave' : ''}</option> })}</select>{form.installer_location_id && form.schedule_type === 'exact' && approvedLeaveConflict(technicianLeaves, form.installer_location_id, form.installation_date, form.installation_time) && <small className="field-warning">This technician is on approved leave at the selected time. Choose another technician or time.</small>}</div>
           <div className="transaction-field technician-note-editor">
             <label><AlertTriangle size={14} /> Important Note for Technician</label>
             <textarea rows="3" value={form.technician_note} onChange={(e) => updateForm('technician_note', e.target.value)} placeholder="e.g. Keep old lock for customer / bring long cylinder / register at guard house / collect balance RM500..." />
@@ -5242,24 +7406,113 @@ function HandoverV6Modal({ booking, form, setForm, locations, saving, error, clo
   return <div className="transaction-backdrop" onClick={close}><section className="mini-modal" onClick={(e) => e.stopPropagation()}><div className="mini-modal-head"><div><p className="kicker">STOCK PREPARATION</p><h2>Hand Over Stock</h2><p>{booking.customer_name} • move reserved items to technician</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div><div className="transaction-field"><label>From</label><select value={form.from_location_id} onChange={(e) => setForm((c) => ({...c, from_location_id:e.target.value}))}><option value="">Select source</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="transaction-field"><label>To Technician</label><select value={form.to_location_id} onChange={(e) => setForm((c) => ({...c, to_location_id:e.target.value}))}><option value="">Select technician</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>{error && <div className="transaction-error">{error}</div>}<div className="mini-modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Moving...' : 'Confirm Handover'}</button></div></section></div>
 }
 
-function CompleteInstallationV6Modal({ booking, form, setForm, files, setFiles, locations, saving, error, close, save }) {
-  return <div className="transaction-backdrop" onClick={close}><section className="transaction-modal completion-v6-modal" onClick={(e) => e.stopPropagation()}><div className="transaction-modal-head"><div><p className="kicker">TECHNICIAN UPDATE</p><h2>Complete Installation</h2><p>{booking.customer_name} • upload site photos and close / pending settle.</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div><div className="transaction-scroll">
-    {booking.technician_note && (
-      <div className="completion-important-note"><AlertTriangle size={16} /><div><strong>Important Note</strong><p>{booking.technician_note}</p></div></div>
-    )}
-    <div className="transaction-field"><label>Stock Holder / Technician *</label><select value={form.stock_location_id} onChange={(e) => setForm((c) => ({...c, stock_location_id:e.target.value}))}><option value="">Select</option>{locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
-    <div className="completion-checks"><label><input type="checkbox" checked={form.customer_taught} onChange={(e) => setForm((c) => ({...c, customer_taught:e.target.checked}))} /><span><strong>Customer taught how to use lock</strong><small>Basic usage / app / charging explained</small></span></label><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked customer for review</strong><small>Google / Facebook review requested</small></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong><small>Customer already submitted review</small></span></label></div>
-    <div className="transaction-field"><label>Installation Photos</label><label className="photo-upload-box"><Upload size={22} /><strong>Choose Photos</strong><span>Front / inside / lock body / overall door</span><input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label>{files.length > 0 && <div className="selected-files">{files.map((f) => <span key={`${f.name}-${f.size}`}><ImageIcon size={13} /> {f.name}</span>)}</div>}</div>
-    <label className="pending-settle-switch"><input type="checkbox" checked={form.pending_settle} onChange={(e) => setForm((c) => ({...c, pending_settle:e.target.checked}))} /><div><strong>Pending Settle</strong><span>Something is not fully completed and we must return.</span></div></label>
-    {form.pending_settle && <div className="transaction-field"><label>What is still not settled? *</label><textarea rows="3" value={form.pending_issue} onChange={(e) => setForm((c) => ({...c, pending_issue:e.target.value}))} placeholder="e.g. Need return to adjust strike plate / replace lock body / Wi-Fi linking..." /></div>}
-    <div className="transaction-field"><label>Completion Remark</label><textarea rows="3" value={form.completion_remark} onChange={(e) => setForm((c) => ({...c, completion_remark:e.target.value}))} /></div>
-    {error && <div className="transaction-error">{error}</div>}
-  </div><div className="transaction-footer"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving & Uploading...' : form.pending_settle ? 'Complete • Pending Settle' : 'Complete Installation'}</button></div></section></div>
+function CompleteInstallationV6Modal({
+  booking,
+  form,
+  setForm,
+  files,
+  setFiles,
+  lockBodyItems,
+  lockBodyProducts,
+  updateLockBody,
+  addLockBody,
+  removeLockBody,
+  productById,
+  productDisplayName,
+  locations,
+  saving,
+  error,
+  close,
+  save,
+}) {
+  const assignedSmartLocks = (booking.reservation_items || [])
+    .filter((item) => productById(item.product_id)?.category !== 'lock_body')
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section className="transaction-modal completion-v6-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="transaction-modal-head">
+          <div>
+            <p className="kicker">TECHNICIAN UPDATE</p>
+            <h2>Complete Installation</h2>
+            <p>{booking.customer_name} • confirm what was installed, then close / pending settle.</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="transaction-scroll">
+          <section className="completion-installed-summary">
+            <div className="completion-installed-head">
+              <div><p className="kicker">ASSIGNED JOB</p><h3>Smart Lock to Install</h3></div>
+              <PackageCheck size={18} />
+            </div>
+            <div className="completion-smart-lock-tags">
+              {assignedSmartLocks.map((item) => (
+                <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>
+              ))}
+              {assignedSmartLocks.length === 0 && <span>Smart lock not recorded</span>}
+            </div>
+          </section>
+
+          {booking.technician_note && (
+            <div className="completion-important-note"><AlertTriangle size={16} /><div><strong>Important Note</strong><p>{booking.technician_note}</p></div></div>
+          )}
+
+          <section className="completion-lock-body-panel">
+            <div className="completion-lock-body-head">
+              <div>
+                <p className="kicker">AFTER INSTALLATION</p>
+                <h3>Lock Body Used</h3>
+                <span>Technician updates the actual lock body after installation. This does not affect Bukku stock.</span>
+              </div>
+              <button type="button" className="add-line-button" onClick={addLockBody}><Plus size={14} /> Add</button>
+            </div>
+            <div className="completion-lock-body-list">
+              {lockBodyItems.map((item, index) => (
+                <div className="completion-lock-body-row" key={index}>
+                  <select value={item.product_id} onChange={(event) => updateLockBody(index, 'product_id', event.target.value)}>
+                    <option value="">Select lock body</option>
+                    {lockBodyProducts.map((product) => (
+                      <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>
+                    ))}
+                  </select>
+                  <div className="completion-lock-body-qty">
+                    <span>Qty</span>
+                    <input type="number" min="1" value={item.quantity} onChange={(event) => updateLockBody(index, 'quantity', event.target.value)} />
+                  </div>
+                  <button type="button" className="remove-line-button" onClick={() => removeLockBody(index)} aria-label="Remove lock body"><Trash2 size={15} /></button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <div className="completion-checks">
+            <label><input type="checkbox" checked={form.customer_taught} onChange={(e) => setForm((c) => ({...c, customer_taught:e.target.checked}))} /><span><strong>Customer taught how to use lock</strong><small>Basic usage / app / charging explained</small></span></label>
+            <label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked customer for review</strong><small>Google / Facebook review requested</small></span></label>
+            <label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong><small>Customer already submitted review</small></span></label>
+          </div>
+
+          <div className="transaction-field">
+            <label>Installation Photos</label>
+            <label className="photo-upload-box"><Upload size={22} /><strong>Choose Photos</strong><span>Front / inside / lock body / overall door</span><input type="file" accept="image/*" multiple onChange={(e) => setFiles(Array.from(e.target.files || []))} /></label>
+            {files.length > 0 && <div className="selected-files">{files.map((file) => <span key={`${file.name}-${file.size}`}><ImageIcon size={13} /> {file.name}</span>)}</div>}
+          </div>
+
+          <label className="pending-settle-switch"><input type="checkbox" checked={form.pending_settle} onChange={(e) => setForm((c) => ({...c, pending_settle:e.target.checked}))} /><div><strong>Pending Settle</strong><span>Something is not fully completed and we must return.</span></div></label>
+          {form.pending_settle && <div className="transaction-field"><label>What is still not settled? *</label><textarea rows="3" value={form.pending_issue} onChange={(e) => setForm((c) => ({...c, pending_issue:e.target.value}))} placeholder="e.g. Need return to adjust strike plate / replace lock body / Wi-Fi linking..." /></div>}
+          <div className="transaction-field"><label>Completion Remark</label><textarea rows="3" value={form.completion_remark} onChange={(e) => setForm((c) => ({...c, completion_remark:e.target.value}))} /></div>
+          {error && <div className="transaction-error">{error}</div>}
+        </div>
+
+        <div className="transaction-footer"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving & Uploading...' : form.pending_settle ? 'Complete • Pending Settle' : 'Complete Installation'}</button></div>
+      </section>
+    </div>
+  )
 }
 
-function FollowupV6Modal({ editor, form, setForm, locations, saving, error, close, save }) {
+function FollowupV6Modal({ editor, form, setForm, locations, saving, error, close, save, technicianLeaves = [] }) {
   const resolve = editor.mode === 'resolve'
-  return <div className="transaction-backdrop" onClick={close}><section className="mini-modal followup-modal" onClick={(e) => e.stopPropagation()}><div className="mini-modal-head"><div><p className="kicker">PENDING SETTLE</p><h2>{resolve ? 'Settle Completed' : 'Schedule Follow-up'}</h2><p>{editor.job?.customer_name} • {editor.followup.issue}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>{resolve ? <><div className="transaction-field"><label>What was settled? *</label><textarea rows="3" value={form.resolution_note} onChange={(e) => setForm((c) => ({...c, resolution_note:e.target.value}))} /></div><div className="completion-checks compact"><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked for review</strong></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong></span></label></div></> : <><div className="transaction-field"><label>Technician</label><select value={form.technician_location_id} onChange={(e) => setForm((c) => ({...c, technician_location_id:e.target.value}))}><option value="">TBC</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div className="transaction-two-col"><div className="transaction-field"><label>Date</label><input type="date" value={form.scheduled_date} onChange={(e) => setForm((c) => ({...c, scheduled_date:e.target.value}))} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.scheduled_time} onChange={(e) => setForm((c) => ({...c, scheduled_time:e.target.value}))} /></div></div><div className="transaction-field"><label>Remark</label><textarea rows="2" value={form.remark} onChange={(e) => setForm((c) => ({...c, remark:e.target.value}))} /></div></>}{error && <div className="transaction-error">{error}</div>}<div className="mini-modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : resolve ? 'Mark Settled' : 'Save Follow-up'}</button></div></section></div>
+  return <div className="transaction-backdrop" onClick={close}><section className="mini-modal followup-modal" onClick={(e) => e.stopPropagation()}><div className="mini-modal-head"><div><p className="kicker">PENDING SETTLE</p><h2>{resolve ? 'Settle Completed' : 'Schedule Follow-up'}</h2><p>{editor.job?.customer_name} • {editor.followup.issue}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>{resolve ? <><div className="transaction-field"><label>What was settled? *</label><textarea rows="3" value={form.resolution_note} onChange={(e) => setForm((c) => ({...c, resolution_note:e.target.value}))} /></div><div className="completion-checks compact"><label><input type="checkbox" checked={form.review_asked} onChange={(e) => setForm((c) => ({...c, review_asked:e.target.checked}))} /><span><strong>Asked for review</strong></span></label><label><input type="checkbox" checked={form.review_received} onChange={(e) => setForm((c) => ({...c, review_received:e.target.checked, review_asked:e.target.checked || c.review_asked}))} /><span><strong>Review received</strong></span></label></div></> : <><div className="transaction-field"><label>Technician</label><select value={form.technician_location_id} onChange={(e) => setForm((c) => ({...c, technician_location_id:e.target.value}))}><option value="">TBC</option>{locations.filter((l) => ['technician','sales_installer','partner'].includes(l.location_type)).map((l) => { const onLeave = approvedLeaveConflict(technicianLeaves, l.id, form.scheduled_date, form.scheduled_time); return <option key={l.id} value={l.id} disabled={onLeave}>{l.name}{onLeave ? ' • On Leave' : ''}</option> })}</select>{form.technician_location_id && approvedLeaveConflict(technicianLeaves, form.technician_location_id, form.scheduled_date, form.scheduled_time) && <small className="field-warning">This technician is on approved leave at this time.</small>}</div><div className="transaction-two-col"><div className="transaction-field"><label>Date</label><input type="date" value={form.scheduled_date} onChange={(e) => setForm((c) => ({...c, scheduled_date:e.target.value}))} /></div><div className="transaction-field"><label>Time</label><input type="time" value={form.scheduled_time} onChange={(e) => setForm((c) => ({...c, scheduled_time:e.target.value}))} /></div></div><div className="transaction-field"><label>Remark</label><textarea rows="2" value={form.remark} onChange={(e) => setForm((c) => ({...c, remark:e.target.value}))} /></div></>}{error && <div className="transaction-error">{error}</div>}<div className="mini-modal-actions"><button className="secondary-button" onClick={close}>Cancel</button><button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : resolve ? 'Mark Settled' : 'Save Follow-up'}</button></div></section></div>
 }
 
 function JobModal({
@@ -5771,6 +8024,7 @@ function JobsPage({
   jobPhotos = [],
   followups = [],
   openFollowup,
+  openEditCompletedJob,
 }) {
   const filtered = jobs.filter((job) => {
     if (jobFilter === 'all') return true
@@ -5885,7 +8139,7 @@ function JobsPage({
 
               <div className="job-details-grid">
                 <div>
-                  <span>Installer / Stock Holder</span>
+                  <span>Technician / Installer</span>
                   <strong>{installer?.name || 'Unknown'}</strong>
                 </div>
                 <div>
@@ -5986,6 +8240,11 @@ function JobsPage({
                 </small>
 
                 <div className="job-action-buttons">
+                  {!isVoided && openEditCompletedJob && (
+                    <button className="secondary-button" onClick={() => openEditCompletedJob(job)}>
+                      <Pencil size={15} /> Edit Completion
+                    </button>
+                  )}
                   {!isVoided && canInvoiceJobs && (
                     <button
                       className={
@@ -7207,9 +9466,9 @@ function ProductSettingsModal({
       <section className="mini-modal settings-editor-modal" onClick={(e) => e.stopPropagation()}>
         <div className="mini-modal-head">
           <div>
-            <p className="kicker">{isNew ? 'NEW PRODUCT' : 'EDIT PRODUCT'}</p>
-            <h2>{isNew ? 'Add Product' : 'Product Settings'}</h2>
-            <p>Product details and minimum stock warning target.</p>
+            <p className="kicker">{isNew ? 'NEW ITEM' : 'EDIT ITEM'}</p>
+            <h2>{isNew ? 'Add Item' : 'Edit Item'}</h2>
+            <p>Item details used in Booking, Operations and technician job cards.</p>
           </div>
           <button className="icon-button" onClick={close}><X size={18} /></button>
         </div>
@@ -7220,7 +9479,7 @@ function ProductSettingsModal({
             <input value={form.sku} onChange={(e) => updateForm('sku', e.target.value)} placeholder="e.g. VN-4" />
           </div>
           <div className="transaction-field">
-            <label>Product Name *</label>
+            <label>Item Name *</label>
             <input value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="e.g. VN-4" />
           </div>
           <div className="transaction-field">
@@ -7234,18 +9493,13 @@ function ProductSettingsModal({
             <label>App Variant</label>
             <input value={form.app_variant} onChange={(e) => updateForm('app_variant', e.target.value)} placeholder="Tuya / TTLock / blank" />
           </div>
-          <div className="transaction-field full-field">
-            <label>Minimum Stock</label>
-            <input type="number" min="0" inputMode="numeric" value={form.minimum_stock} onChange={(e) => updateForm('minimum_stock', e.target.value)} />
-            <small className="field-help">Available stock at or below this number will show as Low Stock.</small>
-          </div>
         </div>
 
         {!isNew && (
           <label className="settings-toggle-row">
             <div>
               <strong>Active Product</strong>
-              <span>Inactive products cannot be selected for new stock transactions.</span>
+              <span>Inactive items cannot be selected in new bookings.</span>
             </div>
             <input type="checkbox" checked={form.active} onChange={(e) => updateForm('active', e.target.checked)} />
           </label>
@@ -7254,7 +9508,7 @@ function ProductSettingsModal({
         {error && <div className="transaction-error">{error}</div>}
         <div className="mini-modal-actions">
           <button className="secondary-button" onClick={close} disabled={saving}>Cancel</button>
-          <button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Product'}</button>
+          <button className="primary-button" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save Item'}</button>
         </div>
       </section>
     </div>
