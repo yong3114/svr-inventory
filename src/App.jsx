@@ -355,8 +355,17 @@ function App() {
   const [leadUpdateSaving, setLeadUpdateSaving] = useState(false)
   const [leadUpdateError, setLeadUpdateError] = useState('')
   const [leadForm, setLeadForm] = useState({
-    customer_name: '', phone: '', source: 'WhatsApp', region_code: 'jb', region_other: '', area: '',
-    interest_text: '', status: 'new', lead_date: formatLocalDateKey(new Date()),
+    customer_name: '',
+    phone: '',
+    phone_country_code: '+60',
+    phone_local: '',
+    source: 'WhatsApp',
+    region_code: 'jb',
+    region_other: '',
+    area: '',
+    interest_text: '',
+    status: 'new',
+    lead_date: formatLocalDateKey(new Date()),
     remark: '',
   })
   const [leadSaving, setLeadSaving] = useState(false)
@@ -496,6 +505,8 @@ function App() {
 
 
   const [operationsView, setOperationsView] = useState('calendar')
+  const [calendarFocusRequest, setCalendarFocusRequest] = useState(null)
+  const [bookingPreview, setBookingPreview] = useState(null)
 
   const [bookingEditor, setBookingEditor] = useState(null)
   const [bookingForm, setBookingForm] = useState({
@@ -624,6 +635,10 @@ function App() {
     }
     if (customerDetail) {
       setCustomerDetail(null)
+      return true
+    }
+    if (bookingPreview) {
+      setBookingPreview(null)
       return true
     }
     if (leadEditor) {
@@ -1954,8 +1969,16 @@ function App() {
     if (!isManagement) return showToast('Owner/Admin permission required')
     setLeadEditor({ type: 'new' })
     setLeadForm({
-      customer_name: '', phone: '', source: 'WhatsApp', region_code: 'jb', region_other: '', area: '',
-      interest_text: '', status: 'new',
+      customer_name: '',
+      phone: '',
+      phone_country_code: '+60',
+      phone_local: '',
+      source: 'WhatsApp',
+      region_code: 'jb',
+      region_other: '',
+      area: '',
+      interest_text: '',
+      status: 'new',
       lead_date: formatLocalDateKey(new Date()),
       remark: '',
     })
@@ -1966,9 +1989,12 @@ function App() {
   function openEditLead(lead) {
     if (!isManagement) return showToast('Owner/Admin permission required')
     setLeadEditor({ type: 'edit', lead })
+    const parsedPhone = splitLeadPhone(lead.phone || '')
     setLeadForm({
       customer_name: lead.customer_name || '',
       phone: lead.phone || '',
+      phone_country_code: parsedPhone.country_code,
+      phone_local: parsedPhone.local,
       source: lead.source || 'WhatsApp',
       region_code: lead.region_code || 'unassigned',
       region_other: lead.region_other || '',
@@ -1997,14 +2023,18 @@ function App() {
 
   async function saveLeadV7() {
     if (!leadEditor) return
-    if (!leadForm.customer_name.trim() && !leadForm.phone.trim()) {
+    const normalizedPhone = buildLeadPhone(
+      leadForm.phone_country_code || '+60',
+      leadForm.phone_local || leadForm.phone || ''
+    )
+    if (!leadForm.customer_name.trim() && !normalizedPhone) {
       return setLeadError('Customer name or phone is required.')
     }
     setLeadSaving(true)
     setLeadError('')
     const params = {
       p_customer_name: leadForm.customer_name.trim() || null,
-      p_phone: leadForm.phone.trim() || null,
+      p_phone: normalizedPhone || null,
       p_source: leadForm.source || 'Other',
       p_region_code: leadForm.region_code || 'unassigned',
       p_region_other: leadForm.region_code === 'others' ? (leadForm.region_other.trim() || null) : null,
@@ -3401,12 +3431,12 @@ function App() {
       if (!item) return
       item.bookings.push(booking)
       if (booking.status === 'reserved') {
-        ;(booking.reservation_items || []).forEach((row) => {
-          const product = productById(row.product_id)
-          if (product?.category === 'lock_body') return
-          const name = productDisplayName(product)
-          if (name && !item.pending_products.includes(name)) item.pending_products.push(name)
-        })
+        expandedProductLabels(
+          booking.reservation_items || [],
+          productById,
+          productDisplayName,
+          'smart_lock'
+        ).forEach((name) => item.pending_products.push(name))
       }
     })
 
@@ -3415,16 +3445,19 @@ function App() {
       if (!item) return
       item.jobs.push(job)
       if (job.status === 'completed') {
-        ;(job.job_items || []).forEach((row) => {
-          const product = productById(row.product_id)
-          const name = productDisplayName(product)
-          if (!name) return
-          if (product?.category === 'lock_body') {
-            if (!item.installed_lock_bodies.includes(name)) item.installed_lock_bodies.push(name)
-          } else if (!item.installed_products.includes(name)) {
-            item.installed_products.push(name)
-          }
-        })
+        expandedProductLabels(
+          job.job_items || [],
+          productById,
+          productDisplayName,
+          'smart_lock'
+        ).forEach((name) => item.installed_products.push(name))
+
+        expandedProductLabels(
+          job.job_items || [],
+          productById,
+          productDisplayName,
+          'lock_body'
+        ).forEach((name) => item.installed_lock_bodies.push(name))
       }
     })
 
@@ -3571,8 +3604,12 @@ function App() {
               reservations={visibleReservations}
               jobs={visibleJobs}
               followups={followups}
+              jobPhotos={jobPhotos}
+              productById={productById}
+              productDisplayName={productDisplayName}
               setActiveTab={setActiveTab}
               setOperationsView={setOperationsView}
+              focusCalendarDate={(date) => setCalendarFocusRequest({ date })}
               openNewLead={openNewLead}
               openNewBooking={openNewBooking}
               currentRole={currentRole}
@@ -3595,6 +3632,7 @@ function App() {
               openEditCompletedJob={openEditCompletedJob}
               setActiveTab={setActiveTab}
               setOperationsView={setOperationsView}
+              focusCalendarDate={(date) => setCalendarFocusRequest({ date })}
             />
           )}
 
@@ -3689,6 +3727,8 @@ function App() {
               cancelLeave={cancelLeave}
               openEditCompletedJob={openEditCompletedJob}
               jobPhotos={jobPhotos}
+              calendarFocusRequest={calendarFocusRequest}
+              openBookingPreview={(booking) => setBookingPreview(booking)}
             />
           )}
 
@@ -4018,6 +4058,21 @@ function App() {
           openPendingCase={(followup) => {
             setCustomerDetail(null)
             openFollowup(followup, 'schedule')
+          }}
+        />
+      )}
+
+      {bookingPreview && (
+        <TechnicianBookingPreviewModalV78
+          booking={bookingPreview}
+          productById={productById}
+          productDisplayName={productDisplayName}
+          locationById={locationById}
+          close={() => setBookingPreview(null)}
+          complete={() => {
+            const target = bookingPreview
+            setBookingPreview(null)
+            openCompleteInstallation(target)
           }}
         />
       )}
@@ -4476,7 +4531,22 @@ function ActionModal({
 
 
 
-function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, setOperationsView, openNewLead, openNewBooking, currentRole, setLeadStatusFilter }) {
+function CrmOpsDashboard({
+  leads,
+  reservations,
+  jobs,
+  followups,
+  jobPhotos = [],
+  productById,
+  productDisplayName,
+  setActiveTab,
+  setOperationsView,
+  focusCalendarDate,
+  openNewLead,
+  openNewBooking,
+  currentRole,
+  setLeadStatusFilter,
+}) {
   const today = formatLocalDateKey(new Date())
   const newLeads = leads.filter((lead) => lead.status === 'new')
   const followUpLeads = leads.filter((lead) => lead.status === 'follow_up')
@@ -4484,9 +4554,64 @@ function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, s
   const activeLeads = leads.filter((lead) => !['done', 'loss'].includes(lead.status))
   const installsToday = reservations.filter((item) => item.status === 'reserved' && item.schedule_type === 'exact' && item.installation_date === today)
   const pendingSchedule = reservations.filter((item) => item.status === 'reserved' && ['tbc', 'estimated'].includes(item.schedule_type))
-  const pendingSettle = followups.filter((item) => ['pending', 'scheduled'].includes(item.status))
-  const notInvoiced = jobs.filter((item) => item.status === 'completed' && item.invoice_status === 'not_invoiced')
   const isManagementUser = ['owner', 'admin'].includes(currentRole)
+  const isTechnicianUser = currentRole === 'technician'
+  const visibleJobIds = new Set((jobs || []).map((job) => job.id))
+  const pendingSettle = followups.filter((item) =>
+    ['pending', 'scheduled'].includes(item.status) &&
+    (isManagementUser || visibleJobIds.has(item.job_id))
+  )
+  const notInvoiced = jobs.filter((item) => item.status === 'completed' && item.invoice_status === 'not_invoiced')
+
+  const upcomingJobs = isTechnicianUser
+    ? reservations
+        .filter((item) =>
+          item.status === 'reserved' &&
+          item.schedule_type === 'exact' &&
+          item.installation_date &&
+          item.installation_date >= today
+        )
+        .sort((a, b) =>
+          `${a.installation_date}${a.installation_time || ''}`.localeCompare(
+            `${b.installation_date}${b.installation_time || ''}`
+          )
+        )
+    : []
+
+  const unacknowledgedNotes = isTechnicianUser
+    ? reservations.filter((item) =>
+        item.status === 'reserved' &&
+        Boolean(item.technician_note) &&
+        !item.technician_note_acknowledged_at
+      )
+    : []
+
+  const incompleteCompletedRecords = isTechnicianUser
+    ? jobs.filter((job) => {
+        if (job.status !== 'completed') return false
+        const hasLockBody = (job.job_items || []).some(
+          (item) => productById?.(item.product_id)?.category === 'lock_body'
+        )
+        const hasPhoto = (jobPhotos || []).some((photo) => photo.job_id === job.id)
+        return !hasLockBody || !hasPhoto || !job.customer_taught
+      })
+    : []
+
+  const technicianAttentionTotal =
+    pendingSettle.length +
+    unacknowledgedNotes.length +
+    incompleteCompletedRecords.length
+
+  const technicianProductText = (booking) => {
+    const labels = expandedProductLabels(
+      (booking?.reservation_items || []).filter(
+        (item) => productById?.(item.product_id)?.category !== 'lock_body'
+      ),
+      productById,
+      productDisplayName
+    )
+    return labels.length ? labels.join(' + ') : 'Product TBC'
+  }
 
   return (
     <div className="page-stack fade-in v7-dashboard">
@@ -4529,6 +4654,57 @@ function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, s
         </button>
       </section>
 
+      {isTechnicianUser && (
+        <section className="surface-card tech-home-upcoming-v77">
+          <div className="section-title-row">
+            <div>
+              <p className="kicker">UPCOMING JOBS</p>
+              <h3>Next scheduled installations</h3>
+            </div>
+            <button
+              className="text-link"
+              onClick={() => {
+                setOperationsView('calendar')
+                setActiveTab('operations')
+              }}
+            >
+              Calendar <ChevronRight size={15} />
+            </button>
+          </div>
+
+          <div className="tech-home-upcoming-list-v77">
+            {upcomingJobs.slice(0, 3).map((booking) => (
+              <button
+                key={booking.id}
+                type="button"
+                onClick={() => {
+                  focusCalendarDate?.(booking.installation_date)
+                  setOperationsView('calendar')
+                  setActiveTab('operations')
+                }}
+              >
+                <div className="tech-home-upcoming-date-v77">
+                  <strong>{crmDisplayDate(booking.installation_date)}</strong>
+                  <span>{booking.installation_time ? String(booking.installation_time).slice(0, 5) : 'Time TBC'}</span>
+                </div>
+                <div className="tech-home-upcoming-main-v77">
+                  <strong>{booking.customer_name || 'Customer'}</strong>
+                  <span>{technicianProductText(booking)}</span>
+                  <small>{booking.installation_area || booking.place_name || 'Area TBC'}</small>
+                </div>
+                <ChevronRight size={16} />
+              </button>
+            ))}
+
+            {upcomingJobs.length === 0 && (
+              <div className="v7-clear">
+                <CalendarDays size={18} /> No upcoming scheduled job
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       <section className="surface-card v7-attention">
         <div className="section-title-row">
           <div><p className="kicker">NEEDS ATTENTION</p><h3>What needs action</h3></div>
@@ -4567,6 +4743,28 @@ function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, s
           </button>
         )}
 
+        {isTechnicianUser && unacknowledgedNotes.length > 0 && (
+          <button onClick={() => { setOperationsView('calendar'); setActiveTab('operations') }}>
+            <AlertTriangle size={16} />
+            <div>
+              <strong>{unacknowledgedNotes.length} important note(s) not acknowledged</strong>
+              <span>Check job instructions before installation</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
+        {isTechnicianUser && incompleteCompletedRecords.length > 0 && (
+          <button onClick={() => { setOperationsView('completed'); setActiveTab('operations') }}>
+            <ClipboardList size={16} />
+            <div>
+              <strong>{incompleteCompletedRecords.length} completed record(s) to check</strong>
+              <span>Missing Lock Body, photo or Customer Taught update</span>
+            </div>
+            <ChevronRight size={16} />
+          </button>
+        )}
+
         {notInvoiced.length > 0 && isManagementUser && (
           <button onClick={() => setActiveTab('jobs')}>
             <ReceiptText size={16} />
@@ -4578,7 +4776,14 @@ function CrmOpsDashboard({ leads, reservations, jobs, followups, setActiveTab, s
           </button>
         )}
 
-        {highImportantLeads.length === 0 && followUpLeads.length === 0 && pendingSettle.length === 0 && (!isManagementUser || notInvoiced.length === 0) && (
+        {(
+          isManagementUser
+            ? highImportantLeads.length === 0 &&
+              followUpLeads.length === 0 &&
+              pendingSettle.length === 0 &&
+              notInvoiced.length === 0
+            : technicianAttentionTotal === 0
+        ) && (
           <div className="v7-clear"><CheckCircle2 size={18} /> Nothing urgent right now</div>
         )}
       </section>
@@ -4631,6 +4836,54 @@ function crmDisplayDate(value, withTime = false) {
     ? { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
     : { day: '2-digit', month: 'short', year: 'numeric' }
   ).format(date)
+}
+
+function splitLeadPhone(value = '') {
+  const raw = String(value || '').trim()
+  const digits = raw.replace(/\D/g, '')
+
+  if (raw.startsWith('+65') || (digits.startsWith('65') && digits.length === 10)) {
+    return { country_code: '+65', local: digits.startsWith('65') ? digits.slice(2) : digits }
+  }
+
+  if (raw.startsWith('+60') || digits.startsWith('60')) {
+    return { country_code: '+60', local: digits.startsWith('60') ? digits.slice(2) : digits }
+  }
+
+  return { country_code: '+60', local: raw }
+}
+
+function buildLeadPhone(countryCode = '+60', localValue = '') {
+  let digits = String(localValue || '').replace(/\D/g, '')
+  if (!digits) return ''
+
+  if (countryCode === '+65') {
+    if (digits.startsWith('65') && digits.length >= 10) digits = digits.slice(2)
+    return `+65${digits}`
+  }
+
+  if (digits.startsWith('60')) digits = digits.slice(2)
+  if (digits.startsWith('0')) digits = digits.slice(1)
+  return `+60${digits}`
+}
+
+function expandedProductLabels(items = [], productById, productDisplayName, category = null) {
+  const labels = []
+
+  ;(items || []).forEach((item) => {
+    const product = productById(item.product_id)
+    if (!product) return
+    if (category && product.category !== category) return
+
+    const label = productDisplayName(product)
+    const quantity = Math.max(1, Number(item.quantity || 1))
+
+    for (let index = 0; index < quantity; index += 1) {
+      labels.push(label)
+    }
+  })
+
+  return labels
 }
 
 function CRMLeadsPage({
@@ -4816,7 +5069,23 @@ function LeadEditorModal({ editor, form, setForm, saving, error, close, save }) 
             </div>
             <div className="transaction-field">
               <label>Phone / WhatsApp</label>
-              <input value={form.phone} onChange={(event) => update('phone', event.target.value)} />
+              <div className="crm-phone-input-v77">
+                <select
+                  value={form.phone_country_code || '+60'}
+                  onChange={(event) => update('phone_country_code', event.target.value)}
+                  aria-label="Phone country code"
+                >
+                  <option value="+60">+60 MY</option>
+                  <option value="+65">+65 SG</option>
+                </select>
+                <input
+                  inputMode="tel"
+                  value={form.phone_local || ''}
+                  onChange={(event) => update('phone_local', event.target.value)}
+                  placeholder={form.phone_country_code === '+65' ? '9123 4567' : '12 345 6789'}
+                />
+              </div>
+              <small className="field-help">Saved as {buildLeadPhone(form.phone_country_code || '+60', form.phone_local || '') || `${form.phone_country_code || '+60'}...`}</small>
             </div>
           </div>
 
@@ -5235,12 +5504,13 @@ function CustomerDetailModal({
   openPendingCase,
 }) {
   const productNames = (rows = [], category = null, fallback = 'Product TBC') => {
-    const filtered = category
-      ? rows.filter((row) => productById(row.product_id)?.category === category)
-      : rows
-    return filtered.length
-      ? filtered.map((row) => `${productDisplayName(productById(row.product_id))}${Number(row.quantity || 1) > 1 ? ` ×${row.quantity}` : ''}`).join(' + ')
-      : fallback
+    const labels = expandedProductLabels(
+      rows || [],
+      productById,
+      productDisplayName,
+      category
+    )
+    return labels.length ? labels.join(' + ') : fallback
   }
 
   const latestAddress = customer.bookings.find((booking) => booking.installation_address)?.installation_address || ''
@@ -5545,6 +5815,7 @@ function TechnicianMyWorkV76({
   openEditCompletedJob,
   setActiveTab,
   setOperationsView,
+  focusCalendarDate,
 }) {
   const technicianLocationId = profile?.location_id || ''
   const today = formatLocalDateKey(new Date())
@@ -5616,20 +5887,18 @@ function TechnicianMyWorkV76({
   const nextLeave = approvedLeaves[0] || null
 
   const smartLockText = (booking) => {
-    const names = (booking?.reservation_items || [])
-      .map((item) => {
-        const product = productById(item.product_id)
-        if (!product || product.category === 'lock_body') return null
-        const name = productDisplayName(product)
-        return Number(item.quantity || 1) > 1
-          ? `${name} ×${item.quantity}`
-          : name
-      })
-      .filter(Boolean)
+    const names = expandedProductLabels(
+      (booking?.reservation_items || []).filter(
+        (item) => productById(item.product_id)?.category !== 'lock_body'
+      ),
+      productById,
+      productDisplayName
+    )
     return names.length ? names.join(' + ') : 'Product TBC'
   }
 
-  const goOps = (view) => {
+  const goOps = (view, date = '') => {
+    if (date) focusCalendarDate?.(date)
     setOperationsView(view)
     setActiveTab('operations')
   }
@@ -5729,13 +5998,21 @@ function TechnicianMyWorkV76({
             )}
           </div>
 
-          {nextBooking.installation_date === today && (
+          {nextBooking.installation_date === today ? (
             <button
               className="primary-button tech-complete-next-v76"
               onClick={() => openCompleteInstallation(nextBooking)}
             >
               <CheckCircle2 size={16} />
               Complete Installation
+            </button>
+          ) : (
+            <button
+              className="secondary-button tech-complete-next-v76"
+              onClick={() => goOps('calendar', nextBooking.installation_date)}
+            >
+              <CalendarDays size={16} />
+              View Schedule
             </button>
           )}
         </section>
@@ -5942,8 +6219,8 @@ function TechnicianCompletedJobsV75({ jobs, productById, productDisplayName, loc
           return (
             <article className="completed-job-card-v75" key={job.id}>
               <div className="completed-job-top-v75"><div><span>{new Date(job.completed_at).toLocaleDateString('en-MY', { day:'2-digit', month:'short', year:'numeric' })}</span><h3>{job.customer_name}</h3><p>{job.installation_area || 'Area not recorded'}</p></div><BadgeCheck size={20} /></div>
-              <div className="completed-job-products-v75"><span>Smart Lock</span><strong>{smartLocks.length ? smartLocks.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : '—'}</strong></div>
-              <div className="completed-job-products-v75 lock-body"><span>Lock Body Used</span><strong>{lockBodies.length ? lockBodies.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : 'Not updated'}</strong></div>
+              <div className="completed-job-products-v75"><span>Smart Lock</span><strong>{smartLocks.length ? expandedProductLabels(smartLocks, productById, productDisplayName).join(' + ') : '—'}</strong></div>
+              <div className="completed-job-products-v75 lock-body"><span>Lock Body Used</span><strong>{lockBodies.length ? expandedProductLabels(lockBodies, productById, productDisplayName).join(' + ') : 'Not updated'}</strong></div>
               <div className="completed-job-meta-v75"><span>{job.customer_taught ? '✓ Customer taught' : 'Customer teaching not marked'}</span><span>{job.review_received ? '✓ Review received' : job.review_asked ? 'Review asked' : 'Review not updated'}</span><span>{photos.length} photo{photos.length === 1 ? '' : 's'}</span></div>
               {job.completion_remark && <p className="completed-job-remark-v75">{job.completion_remark}</p>}
               <button className="secondary-button completed-edit-button-v75" onClick={() => openEditCompletedJob(job)}><Pencil size={15} /> Review / Edit Installation</button>
@@ -5979,7 +6256,7 @@ function EditCompletedJobModalV75({ job, form, setForm, files, setFiles, lockBod
       <section className="transaction-modal completed-edit-modal-v75" onClick={(event) => event.stopPropagation()}>
         <div className="transaction-modal-head"><div><p className="kicker">COMPLETED JOB</p><h2>Review / Edit Installation</h2><p>{job.customer_name} • {job.job_no}</p></div><button className="icon-button" onClick={close}><X size={18} /></button></div>
         <div className="transaction-scroll">
-          <div className="completion-smart-lock-readonly"><span>SMART LOCK INSTALLED</span><strong>{smartLocks.length ? smartLocks.map((item) => `${item.quantity > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`).join(' + ') : '—'}</strong><small>Sales / booking item is kept read-only here.</small></div>
+          <div className="completion-smart-lock-readonly"><span>SMART LOCK INSTALLED</span><strong>{smartLocks.length ? expandedProductLabels(smartLocks, productById, productDisplayName).join(' + ') : '—'}</strong><small>Sales / booking item is kept read-only here.</small></div>
           <div className="completion-lock-body-section"><div className="completion-lock-body-head"><div><p className="kicker">ACTUAL INSTALLATION</p><h3>Lock Body Used</h3></div><button type="button" className="add-line-button" onClick={addLockBody}><Plus size={15} /> Add</button></div>
             {lockBodyItems.map((item, index) => <div className="completion-lock-body-row" key={index}><select value={item.product_id} onChange={(event) => updateLockBody(index, 'product_id', event.target.value)}><option value="">Select lock body</option>{lockBodyProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.app_variant ? ` (${product.app_variant})` : ''}</option>)}</select><div className="completion-lock-body-qty"><span>Qty</span><input type="number" min="1" value={item.quantity} onChange={(event) => updateLockBody(index, 'quantity', event.target.value)} /></div><button type="button" className="remove-line-button" onClick={() => removeLockBody(index)}><Trash2 size={15} /></button></div>)}
           </div>
@@ -5995,6 +6272,134 @@ function EditCompletedJobModalV75({ job, form, setForm, files, setFiles, lockBod
     </div>
   )
 }
+
+
+function TechnicianBookingPreviewModalV78({
+  booking,
+  productById,
+  productDisplayName,
+  locationById,
+  close,
+  complete,
+}) {
+  const today = formatLocalDateKey(new Date())
+  const canCompleteToday = booking.installation_date === today
+  const smartLocks = expandedProductLabels(
+    (booking.reservation_items || []).filter(
+      (item) => productById(item.product_id)?.category !== 'lock_body'
+    ),
+    productById,
+    productDisplayName
+  )
+  const technician = locationById(booking.installer_location_id)
+  const mapUrl = googleMapsUrl(booking)
+
+  return (
+    <div className="transaction-backdrop" onClick={close}>
+      <section
+        className="transaction-modal technician-job-preview-v78"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="transaction-modal-head">
+          <div>
+            <p className="kicker">PENDING INSTALLATION</p>
+            <h2>{booking.customer_name || 'Customer'}</h2>
+            <p>Read-only job preview for technician checking.</p>
+          </div>
+          <button className="icon-button" onClick={close}><X size={18} /></button>
+        </div>
+
+        <div className="transaction-scroll technician-job-preview-scroll-v78">
+          <section className="tech-preview-date-v78">
+            <CalendarDays size={18} />
+            <div>
+              <span>INSTALLATION</span>
+              <strong>
+                {booking.installation_date
+                  ? crmDisplayDate(booking.installation_date)
+                  : 'Date TBC'}
+                {booking.installation_time
+                  ? ` • ${String(booking.installation_time).slice(0, 5)}`
+                  : ''}
+              </strong>
+            </div>
+          </section>
+
+          <section className="tech-preview-product-v78">
+            <span>SMART LOCK TO INSTALL</span>
+            <strong>{smartLocks.length ? smartLocks.join(' + ') : 'Product TBC'}</strong>
+          </section>
+
+          <section className="tech-preview-info-grid-v78">
+            <div><span>Technician</span><strong>{technician?.name || 'Assigned technician'}</strong></div>
+            <div><span>Area</span><strong>{booking.installation_area || booking.place_name || '—'}</strong></div>
+            <div><span>Unit / House No.</span><strong>{booking.unit_no || '—'}</strong></div>
+            <div><span>Phone</span><strong>{booking.customer_phone || '—'}</strong></div>
+          </section>
+
+          {booking.installation_address && (
+            <section className="tech-preview-address-v78">
+              <MapPin size={16} />
+              <div>
+                <span>ADDRESS</span>
+                <p>{booking.installation_address}</p>
+              </div>
+            </section>
+          )}
+
+          {booking.technician_note && (
+            <section className="tech-important-note-v76">
+              <AlertTriangle size={15} />
+              <div>
+                <strong>Important Note</strong>
+                <span>{booking.technician_note}</span>
+              </div>
+            </section>
+          )}
+
+          <div className="tech-preview-actions-v78">
+            {booking.customer_phone && (
+              <a href={`tel:${booking.customer_phone}`}><Phone size={15} /> Call</a>
+            )}
+            {whatsappUrl(booking.customer_phone) && (
+              <a href={whatsappUrl(booking.customer_phone)} target="_blank" rel="noreferrer">
+                <MessageCircle size={15} /> WhatsApp
+              </a>
+            )}
+            {mapUrl && (
+              <a href={mapUrl} target="_blank" rel="noreferrer">
+                <MapPin size={15} /> Maps
+              </a>
+            )}
+          </div>
+
+          {!canCompleteToday && booking.installation_date && (
+            <div className="tech-preview-lock-v78">
+              <KeyRound size={16} />
+              <div>
+                <strong>Complete is locked until installation day</strong>
+                <span>
+                  You can check the job anytime. Complete Installation becomes
+                  available on {crmDisplayDate(booking.installation_date)}.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="transaction-footer">
+          <button className="secondary-button" onClick={close}>Close</button>
+          {canCompleteToday && (
+            <button className="primary-button" onClick={complete}>
+              <CheckCircle2 size={15} /> Complete Installation
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
 
 function OperationsPage({
   bookings,
@@ -6024,6 +6429,8 @@ function OperationsPage({
   cancelLeave,
   openEditCompletedJob,
   jobPhotos = [],
+  calendarFocusRequest,
+  openBookingPreview,
 }) {
   const activeBookings = bookings.filter((item) => item.status === 'reserved')
   const promotion = activeBookings.filter((item) => item.booking_type === 'promotion_only')
@@ -6155,6 +6562,8 @@ function OperationsPage({
           currentRole={currentRole}
           profile={profile}
           technicianLeaves={technicianLeaves}
+          calendarFocusRequest={calendarFocusRequest}
+          openBookingPreview={openBookingPreview}
         />
       )}
 
@@ -6239,6 +6648,8 @@ function OperationsCalendarV61({
   currentRole,
   profile,
   technicianLeaves = [],
+  calendarFocusRequest,
+  openBookingPreview,
 }) {
   const [calendarMode, setCalendarMode] = useState(() => {
     if (typeof window === 'undefined') return 'month'
@@ -6254,6 +6665,15 @@ function OperationsCalendarV61({
       setTechnicianFilter(profile?.location_id || '')
     }
   }, [currentRole, profile?.location_id])
+
+  useEffect(() => {
+    const target = calendarFocusRequest?.date
+    if (!target) return
+    const parsed = new Date(`${target}T12:00:00`)
+    if (Number.isNaN(parsed.getTime())) return
+    setCursor(parsed)
+    if (currentRole === 'technician') setCalendarMode('week')
+  }, [calendarFocusRequest, currentRole])
 
   const technicianLocations = (locations || []).filter((location) =>
     ['technician', 'sales_installer', 'partner'].includes(
@@ -6283,10 +6703,14 @@ function OperationsCalendarV61({
           'Installation',
         address: booking.installation_address || '',
         technicianId: booking.installer_location_id || '',
-        products: (booking.reservation_items || [])
-          .filter((item) => productById(item.product_id)?.category !== 'lock_body')
-          .map((item) => `${Number(item.quantity || 1) > 1 ? `${item.quantity}× ` : ''}${productDisplayName(productById(item.product_id))}`)
-          .join(' + '),
+        products: expandedProductLabels(
+          (booking.reservation_items || []).filter(
+            (item) => productById(item.product_id)?.category !== 'lock_body'
+          ),
+          productById,
+          productDisplayName
+        ).join(' + '),
+        statusLabel: 'Pending Installation',
         record: booking,
       }))
 
@@ -6416,11 +6840,16 @@ function OperationsCalendarV61({
   }
 
   function eventClick(event) {
-    if (!canManage) return
-
     if (event.type === 'installation') {
-      openEditBooking(event.record)
-    } else if (event.type === 'followup') {
+      if (canManage) {
+        openEditBooking(event.record)
+      } else if (currentRole === 'technician') {
+        openBookingPreview?.(event.record)
+      }
+      return
+    }
+
+    if (event.type === 'followup' && canManage) {
       openFollowup(event.record, 'schedule')
     }
   }
@@ -6510,6 +6939,7 @@ function OperationsCalendarV61({
           eventClick={eventClick}
           eventMapUrl={eventMapUrl}
           locationById={locationById}
+          focusDate={calendarFocusRequest?.date || ''}
         />
       )}
 
@@ -6659,6 +7089,7 @@ function WeekCalendarV61({
   eventClick,
   eventMapUrl,
   locationById,
+  focusDate = '',
 }) {
   const start = startOfWeekMonday(cursor)
   const days = Array.from({ length: 7 }, (_, index) => addDays(start, index))
@@ -6669,8 +7100,18 @@ function WeekCalendarV61({
 
   useEffect(() => {
     const nextKeys = days.map((day) => formatLocalDateKey(day))
-    setSelectedKey((current) => nextKeys.includes(current) ? current : (nextKeys.includes(todayKey) ? todayKey : nextKeys[0]))
-  }, [cursor])
+
+    if (focusDate && nextKeys.includes(focusDate)) {
+      setSelectedKey(focusDate)
+      return
+    }
+
+    setSelectedKey((current) =>
+      nextKeys.includes(current)
+        ? current
+        : (nextKeys.includes(todayKey) ? todayKey : nextKeys[0])
+    )
+  }, [cursor, focusDate])
 
   const selectedDay = days.find((day) => formatLocalDateKey(day) === selectedKey) || days[0]
   const selectedEvents = events.filter((event) => event.date === selectedKey)
@@ -6772,6 +7213,11 @@ function CalendarEventV61({
           {event.time || 'TBC'}
         </span>
         <strong>{event.title}</strong>
+        {event.type === 'installation' && event.statusLabel && (
+          <small className="calendar-event-status-v78">
+            {expanded ? event.statusLabel : 'Pending'}
+          </small>
+        )}
         {(expanded || event.unit) && (
           <small>
             {event.unit ? `${event.unit} • ` : ''}
@@ -6914,9 +7360,15 @@ function BookingCardV6({
       <div className="ops-product-tags">
         {productTbc ? (
           <span className="tbc-product">Product TBC</span>
-        ) : (booking.reservation_items || [])
-          .filter((item) => productById(item.product_id)?.category !== 'lock_body')
-          .map((item) => <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>)}
+        ) : expandedProductLabels(
+            (booking.reservation_items || []).filter(
+              (item) => productById(item.product_id)?.category !== 'lock_body'
+            ),
+            productById,
+            productDisplayName
+          ).map((label, index) => (
+            <span key={`${label}-${index}`}>{label}</span>
+          ))}
       </div>
 
       {booking.selling_price != null && (
@@ -7447,8 +7899,12 @@ function CompleteInstallationV6Modal({
               <PackageCheck size={18} />
             </div>
             <div className="completion-smart-lock-tags">
-              {assignedSmartLocks.map((item) => (
-                <span key={item.product_id}>{item.quantity}× {productDisplayName(productById(item.product_id))}</span>
+              {expandedProductLabels(
+                assignedSmartLocks,
+                productById,
+                productDisplayName
+              ).map((label, index) => (
+                <span key={`${label}-${index}`}>{label}</span>
               ))}
               {assignedSmartLocks.length === 0 && <span>Smart lock not recorded</span>}
             </div>
@@ -8199,11 +8655,12 @@ function JobsPage({
               )}
 
               <div className="job-products">
-                {(job.job_items || []).map((item) => (
-                  <span key={item.product_id}>
-                    {item.quantity}×{' '}
-                    {productDisplayName(productById(item.product_id))}
-                  </span>
+                {expandedProductLabels(
+                  job.job_items || [],
+                  productById,
+                  productDisplayName
+                ).map((label, index) => (
+                  <span key={`${label}-${index}`}>{label}</span>
                 ))}
               </div>
 

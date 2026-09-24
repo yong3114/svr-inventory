@@ -10813,3 +10813,279 @@ body {
     white-space:nowrap;
   }
 }
+
+
+/* ==========================================================
+   V7.7 Technician Home + Lead Phone + Product Quantity Display
+   ========================================================== */
+
+.crm-phone-input-v77{
+  display:grid;
+  grid-template-columns:104px minmax(0,1fr);
+  gap:7px;
+  width:100%;
+  min-width:0;
+}
+.crm-phone-input-v77 select,
+.crm-phone-input-v77 input{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+}
+.crm-phone-input-v77 select{
+  font-weight:800;
+}
+
+.tech-home-upcoming-v77{
+  display:grid;
+  gap:10px;
+}
+.tech-home-upcoming-list-v77{
+  display:grid;
+  gap:7px;
+}
+.tech-home-upcoming-list-v77>button{
+  width:100%;
+  min-width:0;
+  display:grid;
+  grid-template-columns:118px minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  border:1px solid #e5e8ec;
+  border-radius:12px;
+  background:#fafbfc;
+  padding:10px;
+  text-align:left;
+  cursor:pointer;
+}
+.tech-home-upcoming-list-v77>button:hover{
+  background:#fff;
+  border-color:#d5dbe2;
+}
+.tech-home-upcoming-date-v77{
+  display:grid;
+  gap:2px;
+}
+.tech-home-upcoming-date-v77 strong{
+  font-size:10px;
+}
+.tech-home-upcoming-date-v77 span{
+  color:#818891;
+  font-size:9px;
+}
+.tech-home-upcoming-main-v77{
+  min-width:0;
+  display:grid;
+  gap:2px;
+}
+.tech-home-upcoming-main-v77 strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-size:11px;
+}
+.tech-home-upcoming-main-v77 span{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#39414a;
+  font-size:9.5px;
+  font-weight:750;
+}
+.tech-home-upcoming-main-v77 small{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  color:#8a9199;
+  font-size:8.5px;
+}
+
+@media(max-width:720px){
+  .crm-phone-input-v77{
+    grid-template-columns:92px minmax(0,1fr);
+    gap:6px;
+  }
+  .crm-phone-input-v77 select,
+  .crm-phone-input-v77 input{
+    min-height:46px;
+    font-size:16px !important;
+  }
+
+  .tech-home-upcoming-v77{
+    padding:12px;
+  }
+  .tech-home-upcoming-list-v77>button{
+    grid-template-columns:92px minmax(0,1fr) auto;
+    gap:7px;
+    padding:9px;
+  }
+  .tech-home-upcoming-date-v77 strong{
+    font-size:9px;
+  }
+  .tech-home-upcoming-main-v77 strong{
+    font-size:10px;
+  }
+  .tech-home-upcoming-main-v77 span{
+    font-size:8.5px;
+  }
+}
+
+
+/* ==========================================================
+   V7.8 Customer Quantity + Calendar Focus + Technician Preview
+   ========================================================== */
+
+.calendar-event-status-v78{
+  width:max-content;
+  max-width:100%;
+  border-radius:999px;
+  background:#fff3d8;
+  color:#846317;
+  padding:3px 6px;
+  font-size:7.5px !important;
+  font-weight:900;
+  line-height:1.1;
+  letter-spacing:.35px;
+  text-transform:uppercase;
+}
+
+.technician-job-preview-v78{
+  width:min(620px,calc(100vw - 24px));
+}
+.technician-job-preview-scroll-v78{
+  display:grid;
+  gap:11px;
+}
+.tech-preview-date-v78{
+  display:flex;
+  align-items:flex-start;
+  gap:9px;
+  border:1px solid #dfe5eb;
+  border-radius:13px;
+  background:#f8fafb;
+  padding:12px;
+}
+.tech-preview-date-v78>div{
+  display:grid;
+  gap:3px;
+}
+.tech-preview-date-v78 span,
+.tech-preview-product-v78 span,
+.tech-preview-address-v78 span,
+.tech-preview-info-grid-v78 span{
+  color:#858d96;
+  font-size:8px;
+  font-weight:900;
+  letter-spacing:.65px;
+}
+.tech-preview-date-v78 strong{
+  font-size:13px;
+}
+.tech-preview-product-v78{
+  display:grid;
+  gap:5px;
+  border-radius:13px;
+  background:#f3f6f8;
+  padding:12px;
+}
+.tech-preview-product-v78 strong{
+  font-size:15px;
+  line-height:1.4;
+}
+.tech-preview-info-grid-v78{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+.tech-preview-info-grid-v78>div{
+  min-width:0;
+  display:grid;
+  gap:3px;
+  border:1px solid #e5e8ec;
+  border-radius:11px;
+  background:#fff;
+  padding:10px;
+}
+.tech-preview-info-grid-v78 strong{
+  min-width:0;
+  overflow-wrap:anywhere;
+  font-size:10px;
+}
+.tech-preview-address-v78{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  border:1px solid #e5e8ec;
+  border-radius:12px;
+  background:#fff;
+  padding:10px;
+}
+.tech-preview-address-v78>div{
+  min-width:0;
+  display:grid;
+  gap:3px;
+}
+.tech-preview-address-v78 p{
+  margin:0;
+  color:#4e5660;
+  font-size:10px;
+  line-height:1.5;
+  overflow-wrap:anywhere;
+}
+.tech-preview-actions-v78{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:6px;
+}
+.tech-preview-actions-v78 a{
+  min-width:0;
+  min-height:40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:6px;
+  border:1px solid #dfe4e9;
+  border-radius:11px;
+  background:#fff;
+  color:#2f353c;
+  text-decoration:none;
+  font-size:9px;
+  font-weight:850;
+}
+.tech-preview-lock-v78{
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  border:1px solid #dfe3e8;
+  border-radius:12px;
+  background:#f6f7f8;
+  padding:10px;
+  color:#626a73;
+}
+.tech-preview-lock-v78>div{
+  display:grid;
+  gap:2px;
+}
+.tech-preview-lock-v78 strong{
+  font-size:10px;
+}
+.tech-preview-lock-v78 span{
+  font-size:9px;
+  line-height:1.45;
+}
+
+@media(max-width:720px){
+  .technician-job-preview-v78{
+    width:calc(100vw - 14px);
+    max-width:none;
+  }
+  .technician-job-preview-scroll-v78{
+    gap:8px;
+  }
+  .tech-preview-info-grid-v78{
+    grid-template-columns:1fr 1fr;
+  }
+  .calendar-event-status-v78{
+    font-size:7px !important;
+  }
+}
